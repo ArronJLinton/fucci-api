@@ -18,13 +18,12 @@ func New(config Config) http.Handler {
 	userRouter.Post("/create", config.handleCreateUser)
 
 	futbolRouter := chi.NewRouter()
-	futbolRouter.Get("/matches", config.handleGetMatches)
+	futbolRouter.Get("/matches", config.getMatches)
 
 	router.Mount("/users", userRouter)
 	router.Mount("/futbol", futbolRouter)
 
 	router.Get("/healthz", handleReadiness)
 	router.Get("/error", handleError)
-
 	return router
 }
