@@ -5,38 +5,43 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os"
 
+	"github.com/ArronJLinton/fucci-api/internal/api"
+	"github.com/ArronJLinton/fucci-api/internal/config"
 	"github.com/ArronJLinton/fucci-api/internal/database"
 	"github.com/go-chi/chi"
 	"github.com/go-chi/cors"
-	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
+	"github.com/uptrace/opentelemetry-go-extra/otelzap"
+	"go.uber.org/zap"
 )
 
-type apiConfig struct {
+type Config struct {
 	DB *database.Queries
 }
 
+var (
+	version = "dev"
+)
+
 func main() {
-	godotenv.Load(".env")
-	portString := os.Getenv("PORT")
-	if portString == "" {
-		log.Fatal("PORT is not found in the enviroment")
-	}
+	// Initialize the logger
+	// TODO: What does the following code do?
+	zlog, _ := zap.NewProduction(
+		zap.Fields(
+			zap.String("version", version),
+		),
+	)
+	defer func() {
+		_ = zlog.Sync()
+	}()
+	logger := otelzap.New(zlog)
 
-	dbURL := os.Getenv("DB_URL")
-	if dbURL == "" {
-		log.Fatal("DB_URL is not found in the environment")
-	}
-
-	conn, err := sql.Open("postgres", dbURL)
+	// Initialize the configuration
+	c := config.InitConfig(logger)
+	conn, err := sql.Open("postgres", c.DB_URL)
 	if err != nil {
 		log.Fatal("Failed to connect to Database - ", err)
-	}
-
-	config := apiConfig{
-		DB: database.New(conn),
 	}
 	router := chi.NewRouter()
 	// Tells browsers how this api can be used
@@ -50,22 +55,18 @@ func main() {
 	}))
 
 	v1Router := chi.NewRouter()
-	v1Router.Get("/healthz", handleReadiness)
-	v1Router.Get("/error", handleError)
-
-	apiRouter := chi.NewRouter()
-	userRouter := chi.NewRouter()
-	userRouter.Post("/create", config.handleCreateUser)
-
-	apiRouter.Mount("/users", userRouter)
+	apiRouter := api.New(api.Config{
+		DB:             database.New(conn),
+		FootballAPIKey: c.FOOTBALL_API_KEY,
+	})
 	v1Router.Mount("/api", apiRouter)
 	router.Mount("/v1", v1Router)
 
 	server := &http.Server{
 		Handler: router,
-		Addr:    ":" + portString,
+		Addr:    ":" + c.PORT,
 	}
-	fmt.Printf("Server starting on port %v", portString)
+	fmt.Printf("Server starting on port %v", c.PORT)
 
 	err = server.ListenAndServe()
 	if err != nil {
