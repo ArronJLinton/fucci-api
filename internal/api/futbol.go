@@ -11,58 +11,6 @@ type GetMatchesParams struct {
 	Date string
 }
 
-func (config *Config) handleGetMatches(w http.ResponseWriter, r *http.Request) {
-	// Step 1: Extract data from the incoming request
-	decoder := json.NewDecoder(r.Body)
-	params := GetMatchesParams{}
-	err := decoder.Decode(&params)
-	if err != nil {
-		respondWithError(w, http.StatusBadRequest, fmt.Sprintf("Error parsing JSON: %s", err))
-		return
-	}
-	defer r.Body.Close()
-
-	// Step 2: Make a request to the third-party service
-	thirdPartyURL := "https://api-football-v1.p.rapidapi.com/v3/fixtures?date=2024-08-23" // Replace with actual URL
-	req, err := http.NewRequest(http.MethodGet, thirdPartyURL, nil)
-	if err != nil {
-		http.Error(w, "Failed to create request to third-party service", http.StatusInternalServerError)
-		return
-	}
-
-	req.Header.Set("Content-Type", "application/json")      // Set headers if needed
-	req.Header.Set("x-rapidapi-key", config.FootballAPIKey) // Set headers if needed
-
-	// Optional: Add headers from the incoming request to the third-party request
-	// for key, values := range r.Header {
-	// 	for _, value := range values {
-	// 		req.Header.Add(key, value)
-	// 	}
-	// }
-
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		http.Error(w, "Failed to send request to third-party service", http.StatusInternalServerError)
-		return
-	}
-	defer resp.Body.Close()
-
-	// Step 3: Handle the response from the third-party service
-	// responseBody, err := ioutil.ReadAll(resp.Body)
-	responseBody := json.NewDecoder(resp.Body)
-	// TODO: // replace with actualy struct
-	data := APIResponse{}
-	err = responseBody.Decode(&data)
-	if err != nil {
-		respondWithError(w, http.StatusBadRequest, fmt.Sprintf("Failed to read response from football api service: %s", err))
-		return
-	}
-
-	// Step 4: Send the response back to the client
-	respondWithJSON(w, http.StatusOK, data)
-}
-
 type APIResponse struct {
 	Get        string `json:"get"`
 	Parameters struct {
@@ -142,4 +90,45 @@ type APIResponse struct {
 			} `json:"penalty"`
 		} `json:"score"`
 	} `json:"response"`
+}
+
+func (config *Config) getMatches(w http.ResponseWriter, r *http.Request) {
+	// Step 1: Extract data from the incoming request
+	decoder := json.NewDecoder(r.Body)
+	params := GetMatchesParams{}
+	err := decoder.Decode(&params)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, fmt.Sprintf("Error parsing JSON: %s", err))
+		return
+	}
+	defer r.Body.Close()
+
+	// Step 2: Make a request to the third-party service
+	url := fmt.Sprintf("https://api-football-v1.p.rapidapi.com/v3/fixtures?date=%s", params.Date)
+	headers := map[string]string{
+		"Content-Type":   "application/json",
+		"x-rapidapi-key": config.FootballAPIKey,
+	}
+	resp, err := HTTPRequest("GET", url, headers, nil)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, fmt.Sprintf("Error creating http request: %s", err))
+		return
+	}
+	defer resp.Body.Close()
+
+	responseBody := json.NewDecoder(resp.Body)
+	data := APIResponse{}
+	err = responseBody.Decode(&data)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, fmt.Sprintf("Failed to read response from football api service: %s", err))
+		return
+	}
+
+	respondWithJSON(w, http.StatusOK, data)
+}
+
+func (config *Config) getMatch(w http.ResponseWriter, r *http.Request) {
+}
+
+func (config *Config) getMatchLineup(w http.ResponseWriter, r *http.Request) {
 }
