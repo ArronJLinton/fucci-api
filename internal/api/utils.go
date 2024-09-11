@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"time"
@@ -13,7 +14,6 @@ func respondWithError(w http.ResponseWriter, code int, msg string) {
 	if code > 499 {
 		log.Println("Responding with 5XX error: ", msg)
 	}
-	// json tags specifies how we want the object to be formed
 	type errResponse struct {
 		Error string `json:"error"`
 	}
@@ -23,7 +23,6 @@ func respondWithError(w http.ResponseWriter, code int, msg string) {
 }
 
 func respondWithJSON(w http.ResponseWriter, code int, payload interface{}) {
-	// returns data as bytes so we can write it in a binary format directly to the http response
 	data, err := json.Marshal(payload)
 	if err != nil {
 		log.Printf("Failed to marshal JSON response: %v", payload)
@@ -67,4 +66,21 @@ func HTTPRequest(method, url string, headers map[string]string, body []byte) (*h
 	}
 
 	return resp, nil
+}
+
+func handleClientRequest[T any](url string, method string, headers map[string]string) (*T, error) {
+	resp, err := HTTPRequest(method, url, headers, nil)
+	if err != nil {
+		return nil, fmt.Errorf("error creating http request: %s", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("non-2xx status code: %d, response: %s", resp.StatusCode, string(bodyBytes))
+	}
+	var result T
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %v", err)
+	}
+	return &result, nil
 }
