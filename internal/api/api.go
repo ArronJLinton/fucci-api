@@ -12,13 +12,14 @@ type Config struct {
 	FootballAPIKey string
 }
 
-func New(config Config) http.Handler {
+func New(c Config) http.Handler {
 	router := chi.NewRouter()
 	userRouter := chi.NewRouter()
-	userRouter.Post("/create", config.handleCreateUser)
+	userRouter.Post("/create", c.handleCreateUser)
 
 	futbolRouter := chi.NewRouter()
-	futbolRouter.Get("/matches", config.getMatches)
+	futbolRouter.Get("/matches", c.getMatches)
+	futbolRouter.Get("/lineup", c.getMatchLineup)
 
 	router.Mount("/users", userRouter)
 	router.Mount("/futbol", futbolRouter)
