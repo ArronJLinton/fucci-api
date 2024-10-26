@@ -181,3 +181,80 @@ func filterByName(items []Player, name string) Player {
 
 	return player
 }
+
+func (c *Config) getLeagues(w http.ResponseWriter, r *http.Request) {
+	// Step 2: Make a request to the third-party service
+	url := "https://api-football-v1.p.rapidapi.com/v3/leagues?season=2024"
+	headers := map[string]string{
+		"Content-Type":   "application/json",
+		"x-rapidapi-key": c.FootballAPIKey,
+	}
+	resp, err := HTTPRequest("GET", url, headers, nil)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, fmt.Sprintf("Error creating http request: %s", err))
+		return
+	}
+	defer resp.Body.Close()
+
+	responseBody := json.NewDecoder(resp.Body)
+	data := GetLeaguesResponse{}
+	err = responseBody.Decode(&data)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, fmt.Sprintf("Failed to read response from football api service: %s", err))
+		return
+	}
+
+	respondWithJSON(w, http.StatusOK, data.Response)
+}
+
+func (c *Config) getLeagueStandingsByTeamId(w http.ResponseWriter, r *http.Request) {
+	queryParams := r.URL.Query()
+	teamId := queryParams.Get("team_id")
+	// TODO: Dynamically set the season year
+	url := fmt.Sprintf("https://api-football-v1.p.rapidapi.com/v3/standings?season=2024&team=%s", teamId)
+	headers := map[string]string{
+		"Content-Type":   "application/json",
+		"x-rapidapi-key": c.FootballAPIKey,
+	}
+	resp, err := HTTPRequest("GET", url, headers, nil)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, fmt.Sprintf("Error creating http request: %s", err))
+		return
+	}
+	defer resp.Body.Close()
+
+	responseBody := json.NewDecoder(resp.Body)
+	data := GetLeagueStandingsByTeamIdResponse{}
+	err = responseBody.Decode(&data)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, fmt.Sprintf("Error parsing response body: %s", err))
+		return
+	}
+	respondWithJSON(w, http.StatusOK, data)
+}
+
+func (c *Config) getLeagueStandingsByLeagueId(w http.ResponseWriter, r *http.Request) {
+	queryParams := r.URL.Query()
+	leagueId := queryParams.Get("league_id")
+	// TODO: Dynamically set the season year
+	url := fmt.Sprintf("https://api-football-v1.p.rapidapi.com/v3/standings?league=%s&season=2024", leagueId)
+	headers := map[string]string{
+		"Content-Type":   "application/json",
+		"x-rapidapi-key": c.FootballAPIKey,
+	}
+	resp, err := HTTPRequest("GET", url, headers, nil)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, fmt.Sprintf("Error creating http request: %s", err))
+		return
+	}
+	defer resp.Body.Close()
+
+	responseBody := json.NewDecoder(resp.Body)
+	data := GetLeagueStandingsByLeagueIdResponse{}
+	err = responseBody.Decode(&data)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, fmt.Sprintf("Error parsing response body: %s", err))
+		return
+	}
+	respondWithJSON(w, http.StatusOK, data.Response[0].League.Standings[0])
+}

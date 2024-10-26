@@ -20,6 +20,9 @@ func New(c Config) http.Handler {
 	futbolRouter := chi.NewRouter()
 	futbolRouter.Get("/matches", c.getMatches)
 	futbolRouter.Get("/lineup", c.getMatchLineup)
+	futbolRouter.Get("/leagues", c.getLeagues)
+	futbolRouter.Get("/team_standings", c.getLeagueStandingsByTeamId)
+	futbolRouter.Get("/league_standings", c.getLeagueStandingsByLeagueId)
 
 	router.Mount("/users", userRouter)
 	router.Mount("/futbol", futbolRouter)
