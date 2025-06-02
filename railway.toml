@@ -11,4 +11,4 @@ restartPolicyType = "on_failure"
 
 [deploy.env]
 DB_URL = "${DB_URL}"
-REDIS_URL = "${REDIS_URL}" 
+REDIS_URL = "redis://${REDISUSER}:${REDISPASSWORD}@${REDISHOST}:${REDISPORT}" 

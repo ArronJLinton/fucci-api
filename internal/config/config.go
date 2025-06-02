@@ -2,6 +2,7 @@ package config
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"github.com/spf13/viper"
@@ -16,6 +17,7 @@ func InitConfig(logger *otelzap.Logger) Config {
 	// viper.SetConfigFile("config")
 	viper.SetDefault("db_url", "")
 	viper.SetDefault("port", "8080")
+	viper.SetDefault("redis_url", "")
 
 	// automatically load matching envs
 	viper.SetEnvKeyReplacer(strings.NewReplacer(`.`, `_`))
@@ -47,11 +49,18 @@ func InitConfig(logger *otelzap.Logger) Config {
 	}
 
 	var c Config
-	viper.Unmarshal(&c)
+	if err := viper.Unmarshal(&c); err != nil {
+		logger.Ctx(context.Background()).Fatal(fmt.Sprintf("Failed to unmarshal config: %v", err))
+	}
 	// if err != nil {
 	// 	logger.Ctx(context.Background()).Fatal(err.Error())
 	// }
 	// Config file found and successfully parsed
+
+	// Debug log all environment variables
+	logger.Ctx(context.Background()).Info(fmt.Sprintf("DB_URL: %s", c.DB_URL))
+	logger.Ctx(context.Background()).Info(fmt.Sprintf("REDIS_URL: %s", c.REDIS_URL))
+	logger.Ctx(context.Background()).Info(fmt.Sprintf("PORT: %s", c.PORT))
 
 	return c
 }
