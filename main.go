@@ -46,7 +46,7 @@ func main() {
 	}
 
 	// Initialize Redis cache
-	redisCache, err := cache.NewCache(c.REDIS_URL)
+	redisCache, err := cache.NewCache(c.REDIS_SERVER_URL)
 	if err != nil {
 		log.Fatal("Failed to connect to Redis - ", err)
 	}
