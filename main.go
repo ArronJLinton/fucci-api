@@ -87,11 +87,17 @@ func main() {
 		fmt.Println("Using PORT from environment:", port)
 	}
 
+	// Determine the bind address based on environment
+	bindAddr := "0.0.0.0"
+	if os.Getenv("RAILWAY_ENVIRONMENT") != "" {
+		bindAddr = "::" // Use IPv6 binding on Railway
+	}
+
 	server := &http.Server{
 		Handler: router,
-		Addr:    fmt.Sprintf("0.0.0.0:%s", port),
+		Addr:    fmt.Sprintf("%s:%s", bindAddr, port),
 	}
-	fmt.Printf("Server starting on port %v\n", port)
+	fmt.Printf("Server starting on %s:%v\n", bindAddr, port)
 
 	err = server.ListenAndServe()
 	if err != nil {
