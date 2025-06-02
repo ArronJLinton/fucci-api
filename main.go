@@ -78,6 +78,10 @@ func main() {
 	v1Router.Mount("/api", apiRouter)
 	router.Mount("/v1", v1Router)
 
+	router.Get("/health", api.HandleReadiness)
+	router.Get("/health/redis", apiCfg.HandleRedisHealth)
+	router.Get("/error", api.HandleError)
+
 	// Get port from environment variable with fallback
 	port := os.Getenv("PORT")
 	if port == "" {
