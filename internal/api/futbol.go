@@ -11,18 +11,19 @@ type GetMatchesParams struct {
 }
 
 func (c *Config) getMatches(w http.ResponseWriter, r *http.Request) {
-	// Step 1: Extract data from the incoming request
-	decoder := json.NewDecoder(r.Body)
-	params := GetMatchesParams{}
-	err := decoder.Decode(&params)
-	if err != nil {
-		respondWithError(w, http.StatusBadRequest, fmt.Sprintf("Error parsing JSON: %s", err))
+	// Step 1: Get date from query parameters
+	queryParams := r.URL.Query()
+	date := queryParams.Get("date")
+	if date == "" {
+		respondWithError(w, http.StatusBadRequest, "date parameter is required")
 		return
 	}
-	defer r.Body.Close()
+
+	// Debug log for date parameter
+	fmt.Printf("Received date parameter: %q\n", date)
 
 	// Step 2: Make a request to the third-party service
-	url := fmt.Sprintf("https://api-football-v1.p.rapidapi.com/v3/fixtures?date=%s", params.Date)
+	url := fmt.Sprintf("https://api-football-v1.p.rapidapi.com/v3/fixtures?date=%s", date)
 	headers := map[string]string{
 		"Content-Type":   "application/json",
 		"x-rapidapi-key": c.FootballAPIKey,
@@ -183,7 +184,6 @@ func filterByName(items []Player, name string) Player {
 }
 
 func (c *Config) getLeagues(w http.ResponseWriter, r *http.Request) {
-	// Step 2: Make a request to the third-party service
 	url := "https://api-football-v1.p.rapidapi.com/v3/leagues?season=2024"
 	headers := map[string]string{
 		"Content-Type":   "application/json",
@@ -203,8 +203,21 @@ func (c *Config) getLeagues(w http.ResponseWriter, r *http.Request) {
 		respondWithError(w, http.StatusBadRequest, fmt.Sprintf("Failed to read response from football api service: %s", err))
 		return
 	}
-
-	respondWithJSON(w, http.StatusOK, data.Response)
+	type LeagueInfo struct {
+		Name    string `json:"name"`
+		Country string `json:"country"`
+		Logo    string `json:"logo"`
+	}
+	leagueNames := []LeagueInfo{}
+	for _, l := range data.Response {
+		obj := LeagueInfo{
+			Name:    l.League.Name,
+			Country: l.Country.Name,
+			Logo:    l.League.Logo,
+		}
+		leagueNames = append(leagueNames, obj)
+	}
+	respondWithJSON(w, http.StatusOK, leagueNames)
 }
 
 func (c *Config) getLeagueStandingsByTeamId(w http.ResponseWriter, r *http.Request) {
