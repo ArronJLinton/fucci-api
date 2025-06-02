@@ -63,11 +63,14 @@ func main() {
 	}))
 
 	v1Router := chi.NewRouter()
-	apiRouter := api.New(api.Config{
-		DB:             database.New(conn),
+	dbQueries := database.New(conn)
+	apiCfg := api.Config{
+		DB:             dbQueries,
+		DBConn:         conn,
 		FootballAPIKey: c.FOOTBALL_API_KEY,
 		Cache:          redisCache,
-	})
+	}
+	apiRouter := api.New(apiCfg)
 	v1Router.Mount("/api", apiRouter)
 	router.Mount("/v1", v1Router)
 
