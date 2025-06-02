@@ -11,4 +11,5 @@ restartPolicyType = "on_failure"
 
 [deploy.env]
 DB_URL = "${DB_URL}"
-REDIS_URL = "redis://${REDISUSER}:${REDISPASSWORD}@${REDISHOST}:${REDISPORT}" 
+REDIS_URL = "redis://${REDISUSER}:${REDISPASSWORD}@${REDISHOST}:${REDISPORT}"
+FOOTBALL_API_KEY = "${FOOTBALL_API_KEY}" 
