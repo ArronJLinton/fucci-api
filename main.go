@@ -76,9 +76,9 @@ func main() {
 
 	server := &http.Server{
 		Handler: router,
-		Addr:    ":" + c.PORT,
+		Addr:    fmt.Sprintf("0.0.0.0:%s", c.PORT),
 	}
-	fmt.Printf("Server starting on port %v", c.PORT)
+	fmt.Printf("Server starting on port %v\n", c.PORT)
 
 	err = server.ListenAndServe()
 	if err != nil {
