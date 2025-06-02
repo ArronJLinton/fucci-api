@@ -336,3 +336,8 @@ type GetLeagueStandingsByTeamIdResponse struct {
 		} `json:"league"`
 	} `json:"response"`
 }
+
+type Lineup struct {
+	Starters    []Player `json:"starters"`
+	Substitutes []Player `json:"substitutes"`
+}
