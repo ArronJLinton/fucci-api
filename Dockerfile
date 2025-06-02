@@ -32,8 +32,5 @@ COPY --from=builder /app/sql ./sql
 RUN adduser -D appuser
 USER appuser
 
-# Expose the application port
-EXPOSE 8080
-
 # Run the application
 CMD ["./main"] 

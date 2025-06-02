@@ -3,6 +3,7 @@ package config
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/spf13/viper"
@@ -16,7 +17,10 @@ func InitConfig(logger *otelzap.Logger) Config {
 	viper.AddConfigPath(".")    // optionally look for config in the working directory
 	// viper.SetConfigFile("config")
 	viper.SetDefault("db_url", "")
-	viper.SetDefault("port", "8080")
+	viper.SetDefault("port", os.Getenv("PORT")) // Use Railway's PORT env var
+	if viper.GetString("port") == "" {
+		viper.SetDefault("port", "8080") // Fallback to 8080 if not set
+	}
 	viper.SetDefault("redis_url", "")
 
 	// automatically load matching envs
