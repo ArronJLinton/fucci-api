@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+
+	"github.com/ArronJLinton/fucci-api/internal/cache"
 )
 
 type GetMatchesParams struct {
@@ -11,6 +13,8 @@ type GetMatchesParams struct {
 }
 
 func (c *Config) getMatches(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
 	// Step 1: Get date from query parameters
 	queryParams := r.URL.Query()
 	date := queryParams.Get("date")
@@ -22,7 +26,25 @@ func (c *Config) getMatches(w http.ResponseWriter, r *http.Request) {
 	// Debug log for date parameter
 	fmt.Printf("Received date parameter: %q\n", date)
 
-	// Step 2: Make a request to the third-party service
+	// Generate cache key
+	cacheKey := fmt.Sprintf("matches:%s", date)
+
+	// Try to get from cache first
+	var data GetMatchesAPIResponse
+	exists, err := c.Cache.Exists(ctx, cacheKey)
+	if err != nil {
+		fmt.Printf("Cache check error: %v\n", err)
+	} else if exists {
+		err = c.Cache.Get(ctx, cacheKey, &data)
+		if err == nil {
+			fmt.Printf("Cache hit for date: %s\n", date)
+			respondWithJSON(w, http.StatusOK, data)
+			return
+		}
+		fmt.Printf("Cache get error: %v\n", err)
+	}
+
+	// If not in cache or error occurred, fetch from API
 	url := fmt.Sprintf("https://api-football-v1.p.rapidapi.com/v3/fixtures?date=%s", date)
 	headers := map[string]string{
 		"Content-Type":   "application/json",
@@ -36,11 +58,32 @@ func (c *Config) getMatches(w http.ResponseWriter, r *http.Request) {
 	defer resp.Body.Close()
 
 	responseBody := json.NewDecoder(resp.Body)
-	data := GetMatchesAPIResponse{}
 	err = responseBody.Decode(&data)
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest, fmt.Sprintf("Failed to read response from football api service: %s", err))
 		return
+	}
+
+	// Determine cache TTL based on match statuses
+	ttl := cache.DefaultTTL
+	if len(data.Response) > 0 {
+		// Check if any matches are live
+		for _, match := range data.Response {
+			status := match.Fixture.Status.Short
+			matchTTL := cache.GetMatchTTL(status)
+			// Use the shortest TTL found (most conservative)
+			if matchTTL < ttl {
+				ttl = matchTTL
+			}
+		}
+	}
+
+	// Store in cache with determined TTL
+	err = c.Cache.Set(ctx, cacheKey, data, ttl)
+	if err != nil {
+		fmt.Printf("Cache set error: %v\n", err)
+	} else {
+		fmt.Printf("Stored in cache: %s with TTL: %v\n", cacheKey, ttl)
 	}
 
 	respondWithJSON(w, http.StatusOK, data)
@@ -50,8 +93,35 @@ func (c *Config) getMatch(w http.ResponseWriter, r *http.Request) {
 }
 
 func (c *Config) getMatchLineup(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 	queryParams := r.URL.Query()
 	matchID := queryParams.Get("match_id")
+	if matchID == "" {
+		respondWithError(w, http.StatusBadRequest, "match_id is required")
+		return
+	}
+
+	// Generate cache key
+	cacheKey := fmt.Sprintf("lineup:%s", matchID)
+
+	// Try to get from cache first
+	var response struct {
+		Home Lineup `json:"home"`
+		Away Lineup `json:"away"`
+	}
+	exists, err := c.Cache.Exists(ctx, cacheKey)
+	if err != nil {
+		fmt.Printf("Cache check error: %v\n", err)
+	} else if exists {
+		err = c.Cache.Get(ctx, cacheKey, &response)
+		if err == nil {
+			fmt.Printf("Cache hit for lineup: %s\n", matchID)
+			respondWithJSON(w, http.StatusOK, response)
+			return
+		}
+		fmt.Printf("Cache get error: %v\n", err)
+	}
+
 	url := fmt.Sprintf("https://api-football-v1.p.rapidapi.com/v3/fixtures/lineups?fixture=%s", matchID)
 	headers := map[string]string{
 		"Content-Type":   "application/json",
@@ -86,76 +156,75 @@ func (c *Config) getMatchLineup(w http.ResponseWriter, r *http.Request) {
 		respondWithError(w, http.StatusBadRequest, fmt.Sprintf("Failed to get team squad: %s", err))
 		return
 	}
-	// read the lineups and add the player details
-	homeTeamStarters := []Player{}
-	for _, p := range getLineUpData.Response[0].StartXI {
-		p := Player{
-			ID:     p.Player.ID,
-			Name:   p.Player.Name,
-			Number: p.Player.Number,
-			Pos:    p.Player.Pos,
-			Grid:   p.Player.Grid,
-			Photo:  filterByName(homeTeamSquad.Response[0].Players, p.Player.Name).Photo,
-		}
-		homeTeamStarters = append(homeTeamStarters, p)
-	}
-	homeTeamSubstitutes := []Player{}
-	for _, p := range getLineUpData.Response[0].Substitutes {
-		p := Player{
-			ID:     p.Player.ID,
-			Name:   p.Player.Name,
-			Number: p.Player.Number,
-			Pos:    p.Player.Pos,
-			Grid:   "",
-			Photo:  filterByName(homeTeamSquad.Response[0].Players, p.Player.Name).Photo,
-		}
-		homeTeamSubstitutes = append(homeTeamSubstitutes, p)
-	}
 
-	awayTeamStarters := []Player{}
-	for _, p := range getLineUpData.Response[1].StartXI {
-		p := Player{
-			ID:     p.Player.ID,
-			Name:   p.Player.Name,
-			Number: p.Player.Number,
-			Pos:    p.Player.Pos,
-			Grid:   p.Player.Grid,
-			Photo:  filterByName(awayTeamSquad.Response[0].Players, p.Player.Name).Photo,
-		}
-		awayTeamStarters = append(awayTeamStarters, p)
-	}
-	awayTeamSubstitutes := []Player{}
-	for _, p := range getLineUpData.Response[1].Substitutes {
-		p := Player{
-			ID:     p.Player.ID,
-			Name:   p.Player.Name,
-			Number: p.Player.Number,
-			Pos:    p.Player.Pos,
-			Grid:   "",
-			Photo:  filterByName(awayTeamSquad.Response[0].Players, p.Player.Name).Photo,
-		}
-		awayTeamSubstitutes = append(awayTeamSubstitutes, p)
-	}
-
-	type Lineup struct {
-		Starters    []Player `json:"starters"`
-		Substitutes []Player `json:"substitutes"`
-	}
-
-	response := struct {
+	// Process lineups and create response
+	response = struct {
 		Home Lineup `json:"home"`
 		Away Lineup `json:"away"`
 	}{
 		Home: Lineup{
-			Starters:    homeTeamStarters,
-			Substitutes: homeTeamSubstitutes,
+			Starters:    processPlayers(getLineUpData.Response[0].StartXI, homeTeamSquad),
+			Substitutes: processSubstitutes(getLineUpData.Response[0].Substitutes, homeTeamSquad),
 		},
 		Away: Lineup{
-			Starters:    awayTeamStarters,
-			Substitutes: awayTeamSubstitutes,
+			Starters:    processPlayers(getLineUpData.Response[1].StartXI, awayTeamSquad),
+			Substitutes: processSubstitutes(getLineUpData.Response[1].Substitutes, awayTeamSquad),
 		},
 	}
+
+	// Store in cache
+	err = c.Cache.Set(ctx, cacheKey, response, cache.LineupTTL)
+	if err != nil {
+		fmt.Printf("Cache set error: %v\n", err)
+	} else {
+		fmt.Printf("Stored lineup in cache: %s with TTL: %v\n", cacheKey, cache.LineupTTL)
+	}
+
 	respondWithJSON(w, http.StatusOK, response)
+}
+
+// Helper functions to process players
+func processPlayers(players []struct {
+	Player Player `json:"player"`
+}, squad *GetSquadResponse) []Player {
+	result := make([]Player, 0, len(players))
+	for _, p := range players {
+		p := Player{
+			ID:     p.Player.ID,
+			Name:   p.Player.Name,
+			Number: p.Player.Number,
+			Pos:    p.Player.Pos,
+			Grid:   p.Player.Grid,
+			Photo:  filterByName(squad.Response[0].Players, p.Player.Name).Photo,
+		}
+		result = append(result, p)
+	}
+	return result
+}
+
+func processSubstitutes(substitutes []struct {
+	Player struct {
+		ID     int    `json:"id"`
+		Name   string `json:"name"`
+		Number int    `json:"number"`
+		Pos    string `json:"pos"`
+		Grid   any    `json:"grid"`
+		Photo  string `json:"photo"`
+	} `json:"player"`
+}, squad *GetSquadResponse) []Player {
+	result := make([]Player, 0, len(substitutes))
+	for _, p := range substitutes {
+		p := Player{
+			ID:     p.Player.ID,
+			Name:   p.Player.Name,
+			Number: p.Player.Number,
+			Pos:    p.Player.Pos,
+			Grid:   "",
+			Photo:  filterByName(squad.Response[0].Players, p.Player.Name).Photo,
+		}
+		result = append(result, p)
+	}
+	return result
 }
 
 func (c *Config) getTeamSquad(id int32) (*GetSquadResponse, error) {
