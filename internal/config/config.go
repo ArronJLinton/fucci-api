@@ -16,31 +16,22 @@ func InitConfig(logger *otelzap.Logger) Config {
 	viper.SetConfigType("env")  // REQUIRED if the config file does not have the extension in the name
 	viper.AddConfigPath(".")    // optionally look for config in the working directory
 	// viper.SetConfigFile("config")
-	viper.SetDefault("db_url", "")
-	viper.SetDefault("port", os.Getenv("PORT")) // Use Railway's PORT env var
-	if viper.GetString("port") == "" {
-		viper.SetDefault("port", "8080") // Fallback to 8080 if not set
-	}
-	viper.SetDefault("redis_url", "")
 
-	// automatically load matching envs
-	viper.SetEnvKeyReplacer(strings.NewReplacer(`.`, `_`))
+	// Set up environment variables first
 	viper.AutomaticEnv()
+	viper.SetEnvKeyReplacer(strings.NewReplacer(`.`, `_`))
 
-	// the following envs are not automatic because they didn't match the key structure
-	// _ = viper.BindEnv("http.cookie_hashkey", "COOKIE_HASHKEY")
-	// _ = viper.BindEnv("http.port", "PORT")
-	// _ = viper.BindEnv("http.secure_cookie", "COOKIE_SECURE")
-	// _ = viper.BindEnv("http.backend_cookie_name", "SECURE_COOKIE_NAME")
-	// _ = viper.BindEnv("http.session_cookie_name", "SESSION_COOKIE_NAME")
-	// _ = viper.BindEnv("http.frontend_cookie_name", "FRONTEND_COOKIE_NAME")
-	// _ = viper.BindEnv("http.domain", "APP_DOMAIN")
-	// _ = viper.BindEnv("http.path_prefix", "PATH_PREFIX")
-	// _ = viper.BindEnv("config.allowedPointValues", "CONFIG_POINTS_ALLOWED")
-	// _ = viper.BindEnv("config.defaultPointValues", "CONFIG_POINTS_DEFAULT")
-	// _ = viper.BindEnv("config.show_warrior_rank", "CONFIG_SHOW_RANK")
-	// _ = viper.BindEnv("auth.header.usernameHeader", "AUTH_HEADER_USERNAME_HEADER")
-	// _ = viper.BindEnv("auth.header.emailHeader", "AUTH_HEADER_EMAIL_HEADER")
+	// Explicitly bind PORT environment variable
+	viper.BindEnv("port", "PORT")
+
+	// Set defaults only if env vars are not present
+	if os.Getenv("PORT") != "" {
+		viper.SetDefault("port", os.Getenv("PORT"))
+	} else {
+		viper.SetDefault("port", "8080")
+	}
+	viper.SetDefault("db_url", "")
+	viper.SetDefault("redis_url", "")
 
 	if err := viper.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
@@ -62,9 +53,11 @@ func InitConfig(logger *otelzap.Logger) Config {
 	// Config file found and successfully parsed
 
 	// Debug log all environment variables
+	logger.Ctx(context.Background()).Info(fmt.Sprintf("Raw PORT env: %s", os.Getenv("PORT")))
+	logger.Ctx(context.Background()).Info(fmt.Sprintf("Viper PORT: %s", viper.GetString("port")))
+	logger.Ctx(context.Background()).Info(fmt.Sprintf("Config PORT: %s", c.PORT))
 	logger.Ctx(context.Background()).Info(fmt.Sprintf("DB_URL: %s", c.DB_URL))
 	logger.Ctx(context.Background()).Info(fmt.Sprintf("REDIS_URL: %s", c.REDIS_URL))
-	logger.Ctx(context.Background()).Info(fmt.Sprintf("PORT: %s", c.PORT))
 
 	return c
 }
