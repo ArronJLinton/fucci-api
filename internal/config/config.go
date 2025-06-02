@@ -1,7 +1,6 @@
 package config
 
 import (
-	"context"
 	"fmt"
 	"strings"
 
@@ -25,22 +24,21 @@ func InitConfig(logger *otelzap.Logger) Config {
 
 	if err := viper.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
-			// Config file not found, continue with env vars
-			logger.Ctx(context.Background()).Info("Config file .env not found, using environment variables")
+			fmt.Println("No .env file found, using environment variables")
 		} else {
-			// Config file was found but another error was produced
-			logger.Ctx(context.Background()).Fatal(err.Error())
+			fmt.Printf("Error reading config file: %v\n", err)
 		}
 	}
 
-	var c Config
-	if err := viper.Unmarshal(&c); err != nil {
-		logger.Ctx(context.Background()).Fatal(fmt.Sprintf("Failed to unmarshal config: %v", err))
+	// Debug logging
+	fmt.Printf("Loading configuration...\n")
+	fmt.Printf("DB_URL: %s\n", viper.GetString("db_url"))
+	fmt.Printf("REDIS_URL: %s\n", viper.GetString("redis_url"))
+	fmt.Printf("FOOTBALL_API_KEY length: %d\n", len(viper.GetString("football_api_key")))
+
+	return Config{
+		DB_URL:           viper.GetString("db_url"),
+		FOOTBALL_API_KEY: viper.GetString("football_api_key"),
+		REDIS_URL:        viper.GetString("redis_url"),
 	}
-
-	// Debug log configuration
-	logger.Ctx(context.Background()).Info(fmt.Sprintf("DB_URL: %s", c.DB_URL))
-	logger.Ctx(context.Background()).Info(fmt.Sprintf("REDIS_URL: %s", c.REDIS_URL))
-
-	return c
 }
