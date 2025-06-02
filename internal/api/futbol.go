@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 
 	"github.com/ArronJLinton/fucci-api/internal/cache"
@@ -22,6 +23,8 @@ func (c *Config) getMatches(w http.ResponseWriter, r *http.Request) {
 		respondWithError(w, http.StatusBadRequest, "date parameter is required")
 		return
 	}
+
+	fmt.Printf("Fetching matches for date: %s\n", date)
 
 	// Generate cache key
 	cacheKey := fmt.Sprintf("matches:%s", date)
@@ -48,6 +51,9 @@ func (c *Config) getMatches(w http.ResponseWriter, r *http.Request) {
 		"x-rapidapi-key": c.FootballAPIKey,
 	}
 
+	fmt.Printf("Making API request to: %s\n", url)
+	fmt.Printf("Using API key: %s\n", c.FootballAPIKey)
+
 	resp, err := HTTPRequest("GET", url, headers, nil)
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest, fmt.Sprintf("Error creating http request: %s", err))
@@ -55,12 +61,24 @@ func (c *Config) getMatches(w http.ResponseWriter, r *http.Request) {
 	}
 	defer resp.Body.Close()
 
-	responseBody := json.NewDecoder(resp.Body)
-	err = responseBody.Decode(&data)
+	fmt.Printf("API Response Status: %s\n", resp.Status)
+
+	// Read the raw response body for debugging
+	rawBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		respondWithError(w, http.StatusBadRequest, fmt.Sprintf("Failed to read response from football api service: %s", err))
+		respondWithError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to read response body: %s", err))
 		return
 	}
+	fmt.Printf("Raw API Response: %s\n", string(rawBody))
+
+	// Create a new reader from the raw body for JSON decoding
+	err = json.Unmarshal(rawBody, &data)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, fmt.Sprintf("Failed to parse response from football api service: %s", err))
+		return
+	}
+
+	fmt.Printf("Parsed Response - Results: %d, Response Length: %d\n", data.Results, len(data.Response))
 
 	// Determine cache TTL based on match statuses
 	ttl := cache.DefaultTTL

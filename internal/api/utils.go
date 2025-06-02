@@ -26,7 +26,8 @@ func respondWithJSON(w http.ResponseWriter, code int, payload interface{}) {
 	data, err := json.Marshal(payload)
 	if err != nil {
 		log.Printf("Failed to marshal JSON response: %v", payload)
-		w.WriteHeader(code)
+		respondWithError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to marshal JSON response: %v", err))
+		return
 	}
 
 	w.Header().Add("Content-Type", "application/json")
