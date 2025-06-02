@@ -3,6 +3,8 @@ package cache
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -13,9 +15,23 @@ type Cache struct {
 }
 
 func NewCache(redisURL string) (*Cache, error) {
+	// Clean up the URL by removing any newlines and extra spaces
+	redisURL = strings.TrimSpace(redisURL)
+	redisURL = strings.ReplaceAll(redisURL, "\n", "")
+
+	// If URL is empty, return error
+	if redisURL == "" {
+		return nil, fmt.Errorf("redis URL is empty")
+	}
+
+	// If URL is just "redis://", it's incomplete
+	if redisURL == "redis://" {
+		return nil, fmt.Errorf("incomplete redis URL")
+	}
+
 	opt, err := redis.ParseURL(redisURL)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to parse Redis URL: %v", err)
 	}
 
 	client := redis.NewClient(opt)
@@ -23,7 +39,7 @@ func NewCache(redisURL string) (*Cache, error) {
 	// Test the connection
 	ctx := context.Background()
 	if err := client.Ping(ctx).Err(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to connect to Redis: %v", err)
 	}
 
 	return &Cache{
