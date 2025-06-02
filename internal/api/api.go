@@ -24,8 +24,12 @@ func New(c Config) http.Handler {
 	futbolRouter.Get("/team_standings", c.getLeagueStandingsByTeamId)
 	futbolRouter.Get("/league_standings", c.getLeagueStandingsByLeagueId)
 
+	googleRouter := chi.NewRouter()
+	googleRouter.Get("/search", c.search)
+
 	router.Mount("/users", userRouter)
 	router.Mount("/futbol", futbolRouter)
+	router.Mount("/google", googleRouter)
 
 	router.Get("/healthz", handleReadiness)
 	router.Get("/error", handleError)
