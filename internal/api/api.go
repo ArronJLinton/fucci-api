@@ -19,8 +19,9 @@ type Config struct {
 func New(c Config) http.Handler {
 	router := chi.NewRouter()
 
-	// Add health check route
-	router.Get("/health", c.healthCheck)
+	// Health check routes
+	router.Get("/health", HandleReadiness)
+	router.Get("/health/redis", c.HandleRedisHealth)
 
 	userRouter := chi.NewRouter()
 	userRouter.Post("/create", c.handleCreateUser)
@@ -39,7 +40,5 @@ func New(c Config) http.Handler {
 	router.Mount("/futbol", futbolRouter)
 	router.Mount("/google", googleRouter)
 
-	router.Get("/healthz", handleReadiness)
-	router.Get("/error", handleError)
 	return router
 }

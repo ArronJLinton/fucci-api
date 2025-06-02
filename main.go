@@ -78,10 +78,6 @@ func main() {
 	v1Router.Mount("/api", apiRouter)
 	router.Mount("/v1", v1Router)
 
-	router.Get("/health", api.HandleReadiness)
-	router.Get("/health/redis", apiCfg.HandleRedisHealth)
-	router.Get("/error", api.HandleError)
-
 	// Get port from environment variable with fallback
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -91,17 +87,15 @@ func main() {
 		fmt.Println("Using PORT from environment:", port)
 	}
 
-	// Determine the bind address based on environment
+	// Always bind to 0.0.0.0 for both local and Railway
 	bindAddr := "0.0.0.0"
-	if os.Getenv("RAILWAY_ENVIRONMENT") != "" {
-		bindAddr = "[::]" // Use IPv6 binding on Railway
-	}
+	serverAddr := fmt.Sprintf("%s:%s", bindAddr, port)
+	fmt.Printf("Server starting on %s\n", serverAddr)
 
 	server := &http.Server{
 		Handler: router,
-		Addr:    fmt.Sprintf("%s:%s", bindAddr, port),
+		Addr:    serverAddr,
 	}
-	fmt.Printf("Server starting on %s:%v\n", bindAddr, port)
 
 	err = server.ListenAndServe()
 	if err != nil {
