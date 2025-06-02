@@ -38,10 +38,6 @@ func main() {
 	}()
 	logger := otelzap.New(zlog)
 
-	// Log PORT environment variable
-	rawPort := os.Getenv("PORT")
-	fmt.Printf("Raw PORT environment variable: %q\n", rawPort)
-
 	// Initialize the configuration
 	c := config.InitConfig(logger)
 	conn, err := sql.Open("postgres", c.DB_URL)
@@ -82,9 +78,6 @@ func main() {
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
-		fmt.Println("No PORT environment variable found, using default:", port)
-	} else {
-		fmt.Println("Using PORT from environment:", port)
 	}
 
 	// Always bind to 0.0.0.0 for both local and Railway
