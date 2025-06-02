@@ -3,6 +3,7 @@ package api
 import (
 	"net/http"
 
+	"github.com/ArronJLinton/fucci-api/internal/cache"
 	"github.com/ArronJLinton/fucci-api/internal/database"
 	"github.com/go-chi/chi"
 )
@@ -10,6 +11,7 @@ import (
 type Config struct {
 	DB             *database.Queries
 	FootballAPIKey string
+	Cache          *cache.Cache
 }
 
 func New(c Config) http.Handler {
