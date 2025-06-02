@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -26,7 +27,8 @@ func respondWithJSON(w http.ResponseWriter, code int, payload interface{}) {
 	data, err := json.Marshal(payload)
 	if err != nil {
 		log.Printf("Failed to marshal JSON response: %v", payload)
-		w.WriteHeader(code)
+		respondWithError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to marshal JSON response: %v", err))
+		return
 	}
 
 	w.Header().Add("Content-Type", "application/json")
@@ -38,11 +40,24 @@ type HealthResponse struct {
 	Message string `json:"message"`
 }
 
-func handleReadiness(w http.ResponseWriter, r *http.Request) {
+func HandleReadiness(w http.ResponseWriter, r *http.Request) {
 	respondWithJSON(w, http.StatusOK, HealthResponse{Message: "OK. Server Ready."})
 }
 
-func handleError(w http.ResponseWriter, r *http.Request) {
+func (c *Config) HandleRedisHealth(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	err := c.Cache.HealthCheck(ctx)
+	if err != nil {
+		respondWithError(w, http.StatusServiceUnavailable, fmt.Sprintf("Redis health check failed: %v", err))
+		return
+	}
+
+	respondWithJSON(w, http.StatusOK, HealthResponse{Message: "Redis health check passed"})
+}
+
+func HandleError(w http.ResponseWriter, r *http.Request) {
 	respondWithError(w, http.StatusInternalServerError, "Something went wrong.")
 }
 

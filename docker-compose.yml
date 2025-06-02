@@ -6,7 +6,7 @@ services:
     ports:
       - '8080:8080'
     environment:
-      - DB_URL=postgres://postgres:postgres@db:5432/fucci_api?sslmode=disable
+      - DB_URL=postgres://arronlinton@localhost:5432/joga_bonito?sslmode=disable
       - PORT=8080
       - FOOTBALL_API_KEY=${FOOTBALL_API_KEY}
       - REDIS_URL=redis://redis:6379/0

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 
 	"github.com/ArronJLinton/fucci-api/internal/api"
 	"github.com/ArronJLinton/fucci-api/internal/cache"
@@ -27,7 +28,6 @@ var (
 
 func main() {
 	// Initialize the logger
-	// TODO: What does the following code do?
 	zlog, _ := zap.NewProduction(
 		zap.Fields(
 			zap.String("version", version),
@@ -74,11 +74,21 @@ func main() {
 	v1Router.Mount("/api", apiRouter)
 	router.Mount("/v1", v1Router)
 
+	// Get port from environment variable with fallback
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+
+	// Always bind to 0.0.0.0 for both local and Railway
+	bindAddr := "0.0.0.0"
+	serverAddr := fmt.Sprintf("%s:%s", bindAddr, port)
+	fmt.Printf("Server starting on %s\n", serverAddr)
+
 	server := &http.Server{
 		Handler: router,
-		Addr:    ":" + c.PORT,
+		Addr:    serverAddr,
 	}
-	fmt.Printf("Server starting on port %v", c.PORT)
 
 	err = server.ListenAndServe()
 	if err != nil {

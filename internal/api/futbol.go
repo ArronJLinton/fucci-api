@@ -3,6 +3,8 @@ package api
 import (
 	"encoding/json"
 	"fmt"
+	"io"
+	"log"
 	"net/http"
 
 	"github.com/ArronJLinton/fucci-api/internal/cache"
@@ -23,9 +25,6 @@ func (c *Config) getMatches(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Debug log for date parameter
-	fmt.Printf("Received date parameter: %q\n", date)
-
 	// Generate cache key
 	cacheKey := fmt.Sprintf("matches:%s", date)
 
@@ -33,15 +32,14 @@ func (c *Config) getMatches(w http.ResponseWriter, r *http.Request) {
 	var data GetMatchesAPIResponse
 	exists, err := c.Cache.Exists(ctx, cacheKey)
 	if err != nil {
-		fmt.Printf("Cache check error: %v\n", err)
+		log.Printf("Cache check error: %v\n", err)
 	} else if exists {
 		err = c.Cache.Get(ctx, cacheKey, &data)
 		if err == nil {
-			fmt.Printf("Cache hit for date: %s\n", date)
 			respondWithJSON(w, http.StatusOK, data)
 			return
 		}
-		fmt.Printf("Cache get error: %v\n", err)
+		log.Printf("Cache get error: %v\n", err)
 	}
 
 	// If not in cache or error occurred, fetch from API
@@ -50,6 +48,7 @@ func (c *Config) getMatches(w http.ResponseWriter, r *http.Request) {
 		"Content-Type":   "application/json",
 		"x-rapidapi-key": c.FootballAPIKey,
 	}
+
 	resp, err := HTTPRequest("GET", url, headers, nil)
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest, fmt.Sprintf("Error creating http request: %s", err))
@@ -57,10 +56,17 @@ func (c *Config) getMatches(w http.ResponseWriter, r *http.Request) {
 	}
 	defer resp.Body.Close()
 
-	responseBody := json.NewDecoder(resp.Body)
-	err = responseBody.Decode(&data)
+	// Read the raw response body for debugging
+	rawBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		respondWithError(w, http.StatusBadRequest, fmt.Sprintf("Failed to read response from football api service: %s", err))
+		respondWithError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to read response body: %s", err))
+		return
+	}
+
+	// Create a new reader from the raw body for JSON decoding
+	err = json.Unmarshal(rawBody, &data)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, fmt.Sprintf("Failed to parse response from football api service: %s", err))
 		return
 	}
 
@@ -81,9 +87,7 @@ func (c *Config) getMatches(w http.ResponseWriter, r *http.Request) {
 	// Store in cache with determined TTL
 	err = c.Cache.Set(ctx, cacheKey, data, ttl)
 	if err != nil {
-		fmt.Printf("Cache set error: %v\n", err)
-	} else {
-		fmt.Printf("Stored in cache: %s with TTL: %v\n", cacheKey, ttl)
+		log.Printf("Cache set error: %v\n", err)
 	}
 
 	respondWithJSON(w, http.StatusOK, data)
