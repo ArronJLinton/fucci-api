@@ -38,8 +38,8 @@ func InitConfig(logger *otelzap.Logger) Config {
 
 	if err := viper.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
-			// Config file not found
-			logger.Ctx(context.Background()).Fatal(err.Error())
+			// Config file not found, continue with env vars
+			logger.Ctx(context.Background()).Info("Config file .env not found, using environment variables")
 		} else {
 			// Config file was found but another error was produced
 			logger.Ctx(context.Background()).Fatal(err.Error())
