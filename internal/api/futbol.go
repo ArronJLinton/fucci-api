@@ -23,9 +23,6 @@ func (c *Config) getMatches(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Debug log for date parameter
-	fmt.Printf("Received date parameter: %q\n", date)
-
 	// Generate cache key
 	cacheKey := fmt.Sprintf("matches:%s", date)
 
@@ -50,6 +47,7 @@ func (c *Config) getMatches(w http.ResponseWriter, r *http.Request) {
 		"Content-Type":   "application/json",
 		"x-rapidapi-key": c.FootballAPIKey,
 	}
+
 	resp, err := HTTPRequest("GET", url, headers, nil)
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest, fmt.Sprintf("Error creating http request: %s", err))
