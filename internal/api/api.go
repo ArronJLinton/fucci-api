@@ -1,6 +1,7 @@
 package api
 
 import (
+	"database/sql"
 	"net/http"
 
 	"github.com/ArronJLinton/fucci-api/internal/cache"
@@ -10,12 +11,17 @@ import (
 
 type Config struct {
 	DB             *database.Queries
+	DBConn         *sql.DB
 	FootballAPIKey string
 	Cache          *cache.Cache
 }
 
 func New(c Config) http.Handler {
 	router := chi.NewRouter()
+
+	// Add health check route
+	router.Get("/health", c.healthCheck)
+
 	userRouter := chi.NewRouter()
 	userRouter.Post("/create", c.handleCreateUser)
 
