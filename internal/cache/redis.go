@@ -51,10 +51,17 @@ func NewCache(redisURL string) (*Cache, error) {
 func (c *Cache) Set(ctx context.Context, key string, value interface{}, expiration time.Duration) error {
 	data, err := json.Marshal(value)
 	if err != nil {
+		fmt.Printf("Error marshaling data for cache key %s: %v\n", key, err)
 		return err
 	}
 
-	return c.client.Set(ctx, key, data, expiration).Err()
+	err = c.client.Set(ctx, key, data, expiration).Err()
+	if err != nil {
+		fmt.Printf("Error setting cache key %s: %v\n", key, err)
+		return err
+	}
+	fmt.Printf("Successfully set cache key %s with expiration %v\n", key, expiration)
+	return nil
 }
 
 // Get retrieves a value from the cache by key and unmarshals it into the provided interface
@@ -62,12 +69,20 @@ func (c *Cache) Get(ctx context.Context, key string, dest interface{}) error {
 	data, err := c.client.Get(ctx, key).Bytes()
 	if err != nil {
 		if err == redis.Nil {
+			fmt.Printf("Cache miss for key %s\n", key)
 			return nil // Key not found
 		}
+		fmt.Printf("Error getting cache key %s: %v\n", key, err)
 		return err
 	}
 
-	return json.Unmarshal(data, dest)
+	err = json.Unmarshal(data, dest)
+	if err != nil {
+		fmt.Printf("Error unmarshaling data for cache key %s: %v\n", key, err)
+		return err
+	}
+	fmt.Printf("Cache hit for key %s\n", key)
+	return nil
 }
 
 // Delete removes a key from the cache
@@ -79,7 +94,10 @@ func (c *Cache) Delete(ctx context.Context, key string) error {
 func (c *Cache) Exists(ctx context.Context, key string) (bool, error) {
 	result, err := c.client.Exists(ctx, key).Result()
 	if err != nil {
+		fmt.Printf("Error checking existence of cache key %s: %v\n", key, err)
 		return false, err
 	}
-	return result > 0, nil
+	exists := result > 0
+	fmt.Printf("Cache key %s exists: %v\n", key, exists)
+	return exists, nil
 }
