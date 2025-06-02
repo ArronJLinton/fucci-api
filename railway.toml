@@ -5,7 +5,7 @@ nixpacksConfigPath = "nixpacks.toml"
 
 [deploy]
 startCommand = "./main"
-healthcheckPath = "/health"
+healthcheckPath = "/v1/api/health"
 healthcheckTimeout = 100
 restartPolicyType = "on_failure"
 
