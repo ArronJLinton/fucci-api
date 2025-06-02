@@ -1,6 +1,7 @@
 [build]
 builder = "nixpacks"
 buildCommand = "go build -o main ."
+nixpacksConfigPath = "nixpacks.toml"
 
 [deploy]
 startCommand = "./main"
