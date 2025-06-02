@@ -1,11 +1,14 @@
 module github.com/ArronJLinton/fucci-api
 
-go 1.23.0
+go 1.22
+
+toolchain go1.23.0
 
 require (
 	github.com/go-chi/chi v1.5.5
 	github.com/go-chi/cors v1.2.1
 	github.com/lib/pq v1.10.9
+	github.com/redis/go-redis/v9 v9.9.0
 	github.com/spf13/viper v1.19.0
 	github.com/uptrace/opentelemetry-go-extra/otelzap v0.3.1
 	go.uber.org/zap v1.27.0
@@ -23,7 +26,6 @@ require (
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.3.4 // indirect
 	github.com/googleapis/gax-go/v2 v2.13.0 // indirect
-	github.com/redis/go-redis/v9 v9.9.0 // indirect
 	go.opencensus.io v0.24.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.54.0 // indirect
 	golang.org/x/crypto v0.28.0 // indirect
