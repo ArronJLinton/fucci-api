@@ -10,4 +10,5 @@ healthcheckTimeout = 100
 restartPolicyType = "on_failure"
 
 [deploy.env]
-PORT = "8080" 
+DB_URL = "${DB_URL}"
+REDIS_URL = "${REDIS_URL}" 

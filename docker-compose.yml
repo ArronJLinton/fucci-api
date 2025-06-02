@@ -9,7 +9,7 @@ services:
       - DB_URL=postgres://postgres:postgres@db:5432/fucci_api?sslmode=disable
       - PORT=8080
       - FOOTBALL_API_KEY=${FOOTBALL_API_KEY}
-      - REDIS_SERVER_URL=redis://redis:6379/0
+      - REDIS_URL=redis://redis:6379/0
     depends_on:
       - db
       - redis
