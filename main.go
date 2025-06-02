@@ -90,7 +90,7 @@ func main() {
 	// Determine the bind address based on environment
 	bindAddr := "0.0.0.0"
 	if os.Getenv("RAILWAY_ENVIRONMENT") != "" {
-		bindAddr = "::" // Use IPv6 binding on Railway
+		bindAddr = "[::]" // Use IPv6 binding on Railway
 	}
 
 	server := &http.Server{
