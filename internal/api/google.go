@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	apiKey = "AIzaSyCX9JKYZ1-SeaQYa4GfHqUPfULWzHKHFdY"
+	apiKey = ""
 	cx     = "some-custom-search-engine-id"
 	query  = "arsenal"
 )
