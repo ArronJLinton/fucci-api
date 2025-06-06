@@ -138,13 +138,23 @@ func (c *Config) getMatchLineup(w http.ResponseWriter, r *http.Request) {
 	}
 	defer resp.Body.Close()
 
-	responseBody := json.NewDecoder(resp.Body)
-	getLineUpData := &GetLineUpResponse{}
-	err = responseBody.Decode(&getLineUpData)
+	// Read the raw response for debugging
+	rawBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		respondWithError(w, http.StatusBadRequest, fmt.Sprintf("Failed to read response from football api service - %s", err))
+		respondWithError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to read response body: %s", err))
 		return
 	}
+
+	// Create a new reader from the raw body for JSON decoding
+	getLineUpData := &GetLineUpResponse{}
+	err = json.Unmarshal(rawBody, &getLineUpData)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, fmt.Sprintf("Failed to parse response from football api service - %s", err))
+		return
+	}
+
+	fmt.Printf("Number of lineup responses: %d\n", len(getLineUpData.Response))
+
 	if len(getLineUpData.Response) < 2 {
 		respondWithJSON(w, http.StatusOK, "No lineup data available")
 		return
