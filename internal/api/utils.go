@@ -89,13 +89,21 @@ func handleClientRequest[T any](url string, method string, headers map[string]st
 		return nil, fmt.Errorf("error creating http request: %s", err)
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		bodyBytes, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("non-2xx status code: %d, response: %s", resp.StatusCode, string(bodyBytes))
+
+	// Read the raw response body
+	rawBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %s", err)
 	}
-	var result T
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %v", err)
+
+	// Create a new reader from the raw body for JSON decoding
+	var response T
+	err = json.Unmarshal(rawBody, &response)
+	if err != nil {
+		// Only log raw response on error for debugging
+		fmt.Printf("Error parsing response from %s:\n%s\n", url, string(rawBody))
+		return nil, fmt.Errorf("failed to parse response from api service: %s", err)
 	}
-	return &result, nil
+
+	return &response, nil
 }

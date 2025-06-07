@@ -6,6 +6,8 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"strings"
+	"unicode"
 
 	"github.com/ArronJLinton/fucci-api/internal/cache"
 )
@@ -203,13 +205,14 @@ func processPlayers(players []struct {
 }, squad *GetSquadResponse) []Player {
 	result := make([]Player, 0, len(players))
 	for _, p := range players {
+		squadPlayer := filterByName(squad.Response[0].Players, p.Player)
 		p := Player{
 			ID:     p.Player.ID,
 			Name:   p.Player.Name,
 			Number: p.Player.Number,
 			Pos:    p.Player.Pos,
 			Grid:   p.Player.Grid,
-			Photo:  filterByName(squad.Response[0].Players, p.Player.Name).Photo,
+			Photo:  squadPlayer.Photo,
 		}
 		result = append(result, p)
 	}
@@ -228,17 +231,90 @@ func processSubstitutes(substitutes []struct {
 }, squad *GetSquadResponse) []Player {
 	result := make([]Player, 0, len(substitutes))
 	for _, p := range substitutes {
+		squadPlayer := filterByName(squad.Response[0].Players, Player{
+			ID:     p.Player.ID,
+			Name:   p.Player.Name,
+			Number: p.Player.Number,
+		})
+
 		p := Player{
 			ID:     p.Player.ID,
 			Name:   p.Player.Name,
 			Number: p.Player.Number,
 			Pos:    p.Player.Pos,
 			Grid:   "",
-			Photo:  filterByName(squad.Response[0].Players, p.Player.Name).Photo,
+			Photo:  squadPlayer.Photo,
 		}
 		result = append(result, p)
 	}
 	return result
+}
+
+func filterByName(items []Player, player Player) Player {
+	// First try to match by ID
+	if player.ID != 0 {
+		for _, item := range items {
+			if item.ID == player.ID {
+				return item
+			}
+		}
+	}
+
+	// If ID match fails, try name matching with various normalizations
+	normalizedSearchName := normalizeName(player.Name)
+	var bestMatch Player
+	var maxSimilarity float32 = 0
+
+	for _, item := range items {
+		normalizedItemName := normalizeName(item.Name)
+
+		// Try exact match first
+		if normalizedItemName == normalizedSearchName {
+			return item
+		}
+
+		// Check if names contain each other
+		if strings.Contains(normalizedItemName, normalizedSearchName) ||
+			strings.Contains(normalizedSearchName, normalizedItemName) {
+			similarity := float32(len(normalizedItemName)) / float32(len(normalizedSearchName))
+			if similarity > maxSimilarity {
+				maxSimilarity = similarity
+				bestMatch = item
+			}
+		}
+
+		// If jersey numbers match and names are similar enough, consider it a match
+		if player.Number != 0 && item.Number == player.Number {
+			return item
+		}
+	}
+
+	// If we found a good match, return it
+	if maxSimilarity > 0.7 {
+		return bestMatch
+	}
+
+	// Return empty player if no match found
+	return Player{}
+}
+
+func normalizeName(name string) string {
+	// Convert to lowercase
+	name = strings.ToLower(name)
+
+	// Remove dots and extra spaces
+	name = strings.ReplaceAll(name, ".", "")
+	name = strings.Join(strings.Fields(name), " ")
+
+	// Remove special characters
+	name = strings.Map(func(r rune) rune {
+		if unicode.IsLetter(r) || unicode.IsSpace(r) {
+			return r
+		}
+		return -1
+	}, name)
+
+	return name
 }
 
 func (c *Config) getTeamSquad(id int32) (*GetSquadResponse, error) {
@@ -247,23 +323,18 @@ func (c *Config) getTeamSquad(id int32) (*GetSquadResponse, error) {
 		"x-rapidapi-key": c.FootballAPIKey,
 	}
 	url := fmt.Sprintf("https://api-football-v1.p.rapidapi.com/v3/players/squads?team=%d", id)
+
 	response, err := handleClientRequest[GetSquadResponse](url, "GET", headers)
 	if err != nil {
 		return nil, fmt.Errorf("error creating http request: %s", err)
 	}
-	return response, nil
-}
 
-func filterByName(items []Player, name string) Player {
-	player := Player{}
-	for _, item := range items {
-		if item.Name == name {
-			player = item
-			break
-		}
+	// Log only if no squad data found
+	if len(response.Response) == 0 {
+		fmt.Printf("No squad data received for team ID: %d\n", id)
 	}
 
-	return player
+	return response, nil
 }
 
 func (c *Config) getLeagues(w http.ResponseWriter, r *http.Request) {
