@@ -40,6 +40,16 @@ func main() {
 
 	// Initialize the configuration
 	c := config.InitConfig(logger)
+
+	// Validate required configuration
+	if c.FOOTBALL_API_KEY == "" {
+		log.Fatal("FOOTBALL_API_KEY configuration is required")
+	}
+
+	if c.TWITTER_API_KEY == "" {
+		log.Fatal("TWITTER_API_KEY configuration is required")
+	}
+
 	conn, err := sql.Open("postgres", c.DB_URL)
 	if err != nil {
 		log.Fatal("Failed to connect to Database - ", err)
@@ -64,10 +74,13 @@ func main() {
 
 	v1Router := chi.NewRouter()
 	dbQueries := database.New(conn)
+
+	// Initialize API config using values from config
 	apiCfg := api.Config{
 		DB:             dbQueries,
 		DBConn:         conn,
 		FootballAPIKey: c.FOOTBALL_API_KEY,
+		TwitterAPIKey:  c.TWITTER_API_KEY,
 		Cache:          redisCache,
 	}
 	apiRouter := api.New(apiCfg)

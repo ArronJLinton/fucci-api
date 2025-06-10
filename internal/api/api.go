@@ -13,6 +13,7 @@ type Config struct {
 	DB             *database.Queries
 	DBConn         *sql.DB
 	FootballAPIKey string
+	TwitterAPIKey  string
 	Cache          *cache.Cache
 }
 
@@ -36,9 +37,14 @@ func New(c Config) http.Handler {
 	googleRouter := chi.NewRouter()
 	googleRouter.Get("/search", c.search)
 
+	twitterRouter := chi.NewRouter()
+	twitterRouter.Get("/team", c.getTeamTweets)
+	twitterRouter.Get("/match", c.getMatchTweets)
+
 	router.Mount("/users", userRouter)
 	router.Mount("/futbol", futbolRouter)
 	router.Mount("/google", googleRouter)
+	router.Mount("/twitter", twitterRouter)
 
 	return router
 }

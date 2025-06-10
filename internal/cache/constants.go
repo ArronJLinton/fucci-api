@@ -10,6 +10,8 @@ const (
 	LeagueTableTTL = 12 * time.Hour
 	LineupTTL      = 12 * time.Hour
 	StandingsTTL   = 6 * time.Hour
+	TwitterTTL     = 15 * time.Minute
+	MatchTweetsTTL = 5 * time.Minute
 	DefaultTTL     = 1 * time.Hour
 )
 
