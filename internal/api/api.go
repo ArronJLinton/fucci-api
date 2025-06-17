@@ -10,10 +10,11 @@ import (
 )
 
 type Config struct {
-	DB             *database.Queries
-	DBConn         *sql.DB
-	FootballAPIKey string
-	Cache          *cache.Cache
+	DB                 *database.Queries
+	DBConn             *sql.DB
+	FootballAPIKey     string
+	Cache              *cache.Cache
+	APIFootballBaseURL string
 }
 
 func New(c Config) http.Handler {
