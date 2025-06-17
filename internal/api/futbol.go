@@ -418,85 +418,138 @@ func (c *Config) getLeagueStandingsByTeamId(w http.ResponseWriter, r *http.Reque
 func (c *Config) getLeagueStandingsByLeagueId(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	queryParams := r.URL.Query()
-	leagueId := queryParams.Get("league_id")
-	if leagueId == "" {
+	leagueID := queryParams.Get("league_id")
+	season := queryParams.Get("season")
+
+	if leagueID == "" {
 		respondWithError(w, http.StatusBadRequest, "league_id is required")
 		return
 	}
 
+	if season == "" {
+		respondWithError(w, http.StatusBadRequest, "season is required")
+		return
+	}
+
 	// Generate cache key
-	cacheKey := fmt.Sprintf("standings:league:%s", leagueId)
+	cacheKey := fmt.Sprintf("league_standings:%s:%s", leagueID, season)
 
 	// Try to get from cache first
-	var data GetLeagueStandingsByLeagueIdResponse
+	var data GetLeagueStandingsResponse
 	exists, err := c.Cache.Exists(ctx, cacheKey)
 	if err != nil {
 		log.Printf("Cache check error: %v\n", err)
 	} else if exists {
 		err = c.Cache.Get(ctx, cacheKey, &data)
 		if err == nil {
-			respondWithJSON(w, http.StatusOK, data.Response[0].League.Standings[0])
+			respondWithJSON(w, http.StatusOK, data)
 			return
 		}
 		log.Printf("Cache get error: %v\n", err)
 	}
 
-	// Use previous year for season
-	seasonYear := time.Now().Year() - 1
-	url := fmt.Sprintf("https://api-football-v1.p.rapidapi.com/v3/standings?league=%s&season=%d", leagueId, seasonYear)
+	// Use configurable base URL with fallback
+	baseURL := c.APIFootballBaseURL
+	if baseURL == "" {
+		baseURL = "https://api-football-v1.p.rapidapi.com/v3"
+	}
+	url := fmt.Sprintf("%s/standings?league=%s&season=%s", baseURL, leagueID, season)
 	headers := map[string]string{
 		"Content-Type":   "application/json",
 		"x-rapidapi-key": c.FootballAPIKey,
 	}
 
-	log.Printf("Making request to URL: %s", url)
-
 	resp, err := HTTPRequest("GET", url, headers, nil)
 	if err != nil {
-		log.Printf("Error making request: %v", err)
 		respondWithError(w, http.StatusBadRequest, fmt.Sprintf("Error creating http request: %s", err))
 		return
 	}
 	defer resp.Body.Close()
 
-	// Read the response body
-	body, err := io.ReadAll(resp.Body)
+	// Read the raw response body for debugging
+	rawBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		log.Printf("Error reading response body: %v", err)
-		respondWithError(w, http.StatusInternalServerError, "Error reading response body")
+		respondWithError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to read response body: %s", err))
 		return
 	}
 
-	// Log the raw response for debugging
-	log.Printf("Raw response: %s", string(body))
-
-	// Parse the response
-	if err := json.Unmarshal(body, &data); err != nil {
-		log.Printf("Error parsing response: %v", err)
-		respondWithError(w, http.StatusInternalServerError, "Error parsing response")
+	// Create a new reader from the raw body for JSON decoding
+	err = json.Unmarshal(rawBody, &data)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, fmt.Sprintf("Failed to parse response from football api service: %s", err))
 		return
 	}
 
-	// Check if we have any response data
-	if len(data.Response) == 0 {
-		log.Printf("No response data found for league ID: %s", leagueId)
-		respondWithError(w, http.StatusNotFound, "No league standings found for the given league ID")
-		return
-	}
-
-	// Check if we have any standings data
-	if len(data.Response[0].League.Standings) == 0 {
-		log.Printf("No standings data found for league: %s", data.Response[0].League.Name)
-		respondWithError(w, http.StatusNotFound, "No standings data available for this league")
-		return
-	}
-
-	// Store in cache with 6 hour TTL
-	err = c.Cache.Set(ctx, cacheKey, data, cache.StandingsTTL)
+	// Store in cache
+	err = c.Cache.Set(ctx, cacheKey, data, cache.DefaultTTL)
 	if err != nil {
 		log.Printf("Cache set error: %v\n", err)
 	}
 
-	// Return the first standings array
-	respondWithJSON(w, http.StatusOK, data.Response[0].League.Standings[0])
+	respondWithJSON(w, http.StatusOK, data)
+}
+
+type GetLeagueStandingsResponse struct {
+	Get      string `json:"get"`
+	Response []struct {
+		League struct {
+			ID        int    `json:"id"`
+			Name      string `json:"name"`
+			Country   string `json:"country"`
+			Logo      string `json:"logo"`
+			Flag      string `json:"flag"`
+			Season    int    `json:"season"`
+			Standings [][]struct {
+				Rank int `json:"rank"`
+				Team struct {
+					ID   int    `json:"id"`
+					Name string `json:"name"`
+					Logo string `json:"logo"`
+				} `json:"team"`
+				Points      int    `json:"points"`
+				GoalsDiff   int    `json:"goalsDiff"`
+				Group       string `json:"group"`
+				Form        string `json:"form"`
+				Status      string `json:"status"`
+				Description string `json:"description"`
+				All         struct {
+					Played int `json:"played"`
+					Win    int `json:"win"`
+					Draw   int `json:"draw"`
+					Lose   int `json:"lose"`
+					Goals  struct {
+						For     int `json:"for"`
+						Against int `json:"against"`
+					} `json:"goals"`
+				} `json:"all"`
+				Home struct {
+					Played int `json:"played"`
+					Win    int `json:"win"`
+					Draw   int `json:"draw"`
+					Lose   int `json:"lose"`
+					Goals  struct {
+						For     int `json:"for"`
+						Against int `json:"against"`
+					} `json:"goals"`
+				} `json:"home"`
+				Away struct {
+					Played int `json:"played"`
+					Win    int `json:"win"`
+					Draw   int `json:"draw"`
+					Lose   int `json:"lose"`
+					Goals  struct {
+						For     int `json:"for"`
+						Against int `json:"against"`
+					} `json:"goals"`
+				} `json:"away"`
+				Update string `json:"update"`
+			} `json:"standings"`
+		} `json:"league"`
+	} `json:"response"`
+	Errors  []string `json:"errors"`
+	Results int      `json:"results"`
+	Paging  struct {
+		Current int `json:"current"`
+		Total   int `json:"total"`
+	} `json:"paging"`
 }
