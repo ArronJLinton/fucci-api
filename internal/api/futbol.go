@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"time"
 	"unicode"
 
 	"github.com/ArronJLinton/fucci-api/internal/cache"
@@ -128,7 +129,12 @@ func (c *Config) getMatchLineup(w http.ResponseWriter, r *http.Request) {
 		fmt.Printf("Cache get error: %v\n", err)
 	}
 
-	url := fmt.Sprintf("https://api-football-v1.p.rapidapi.com/v3/fixtures/lineups?fixture=%s", matchID)
+	// Use configurable base URL with fallback
+	baseURL := c.APIFootballBaseURL
+	if baseURL == "" {
+		baseURL = "https://api-football-v1.p.rapidapi.com/v3"
+	}
+	url := fmt.Sprintf("%s/fixtures/lineups?fixture=%s", baseURL, matchID)
 	headers := map[string]string{
 		"Content-Type":   "application/json",
 		"x-rapidapi-key": c.FootballAPIKey,
@@ -162,6 +168,7 @@ func (c *Config) getMatchLineup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Use the same base URL for squad requests
 	homeTeamSquad, err := c.getTeamSquad(int32(getLineUpData.Response[0].Team.ID))
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest, fmt.Sprintf("Failed to get team squad: %s", err))
@@ -322,7 +329,13 @@ func (c *Config) getTeamSquad(id int32) (*GetSquadResponse, error) {
 		"Content-Type":   "application/json",
 		"x-rapidapi-key": c.FootballAPIKey,
 	}
-	url := fmt.Sprintf("https://api-football-v1.p.rapidapi.com/v3/players/squads?team=%d", id)
+
+	// Use configurable base URL with fallback
+	baseURL := c.APIFootballBaseURL
+	if baseURL == "" {
+		baseURL = "https://api-football-v1.p.rapidapi.com/v3"
+	}
+	url := fmt.Sprintf("%s/players/squads?team=%d", baseURL, id)
 
 	response, err := handleClientRequest[GetSquadResponse](url, "GET", headers)
 	if err != nil {
@@ -338,7 +351,8 @@ func (c *Config) getTeamSquad(id int32) (*GetSquadResponse, error) {
 }
 
 func (c *Config) getLeagues(w http.ResponseWriter, r *http.Request) {
-	url := "https://api-football-v1.p.rapidapi.com/v3/leagues?season=2024"
+
+	url := "https://api-football-v1.p.rapidapi.com/v3/leagues?season=2025"
 	headers := map[string]string{
 		"Content-Type":   "application/json",
 		"x-rapidapi-key": c.FootballAPIKey,
@@ -378,7 +392,8 @@ func (c *Config) getLeagueStandingsByTeamId(w http.ResponseWriter, r *http.Reque
 	queryParams := r.URL.Query()
 	teamId := queryParams.Get("team_id")
 	// TODO: Dynamically set the season year
-	url := fmt.Sprintf("https://api-football-v1.p.rapidapi.com/v3/standings?season=2024&team=%s", teamId)
+	currentYear := time.Now().Year()
+	url := fmt.Sprintf("https://api-football-v1.p.rapidapi.com/v3/standings?season=%d&team=%s", currentYear, teamId)
 	headers := map[string]string{
 		"Content-Type":   "application/json",
 		"x-rapidapi-key": c.FootballAPIKey,
@@ -401,27 +416,87 @@ func (c *Config) getLeagueStandingsByTeamId(w http.ResponseWriter, r *http.Reque
 }
 
 func (c *Config) getLeagueStandingsByLeagueId(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 	queryParams := r.URL.Query()
 	leagueId := queryParams.Get("league_id")
-	// TODO: Dynamically set the season year
-	url := fmt.Sprintf("https://api-football-v1.p.rapidapi.com/v3/standings?league=%s&season=2024", leagueId)
+	if leagueId == "" {
+		respondWithError(w, http.StatusBadRequest, "league_id is required")
+		return
+	}
+
+	// Generate cache key
+	cacheKey := fmt.Sprintf("standings:league:%s", leagueId)
+
+	// Try to get from cache first
+	var data GetLeagueStandingsByLeagueIdResponse
+	exists, err := c.Cache.Exists(ctx, cacheKey)
+	if err != nil {
+		log.Printf("Cache check error: %v\n", err)
+	} else if exists {
+		err = c.Cache.Get(ctx, cacheKey, &data)
+		if err == nil {
+			respondWithJSON(w, http.StatusOK, data.Response[0].League.Standings[0])
+			return
+		}
+		log.Printf("Cache get error: %v\n", err)
+	}
+
+	// Use previous year for season
+	seasonYear := time.Now().Year() - 1
+	url := fmt.Sprintf("https://api-football-v1.p.rapidapi.com/v3/standings?league=%s&season=%d", leagueId, seasonYear)
 	headers := map[string]string{
 		"Content-Type":   "application/json",
 		"x-rapidapi-key": c.FootballAPIKey,
 	}
+
+	log.Printf("Making request to URL: %s", url)
+
 	resp, err := HTTPRequest("GET", url, headers, nil)
 	if err != nil {
+		log.Printf("Error making request: %v", err)
 		respondWithError(w, http.StatusBadRequest, fmt.Sprintf("Error creating http request: %s", err))
 		return
 	}
 	defer resp.Body.Close()
 
-	responseBody := json.NewDecoder(resp.Body)
-	data := GetLeagueStandingsByLeagueIdResponse{}
-	err = responseBody.Decode(&data)
+	// Read the response body
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		respondWithError(w, http.StatusBadRequest, fmt.Sprintf("Error parsing response body: %s", err))
+		log.Printf("Error reading response body: %v", err)
+		respondWithError(w, http.StatusInternalServerError, "Error reading response body")
 		return
 	}
+
+	// Log the raw response for debugging
+	log.Printf("Raw response: %s", string(body))
+
+	// Parse the response
+	if err := json.Unmarshal(body, &data); err != nil {
+		log.Printf("Error parsing response: %v", err)
+		respondWithError(w, http.StatusInternalServerError, "Error parsing response")
+		return
+	}
+
+	// Check if we have any response data
+	if len(data.Response) == 0 {
+		log.Printf("No response data found for league ID: %s", leagueId)
+		respondWithError(w, http.StatusNotFound, "No league standings found for the given league ID")
+		return
+	}
+
+	// Check if we have any standings data
+	if len(data.Response[0].League.Standings) == 0 {
+		log.Printf("No standings data found for league: %s", data.Response[0].League.Name)
+		respondWithError(w, http.StatusNotFound, "No standings data available for this league")
+		return
+	}
+
+	// Store in cache with 6 hour TTL
+	err = c.Cache.Set(ctx, cacheKey, data, cache.StandingsTTL)
+	if err != nil {
+		log.Printf("Cache set error: %v\n", err)
+	}
+
+	// Return the first standings array
 	respondWithJSON(w, http.StatusOK, data.Response[0].League.Standings[0])
 }
