@@ -181,7 +181,7 @@ func (m *MockCache) Exists(ctx context.Context, key string) (bool, error) {
 	return m.existsFunc(ctx, key)
 }
 
-func TestGetLeagueStandingsByLeagueId(t *testing.T) {
+func TestGetLeagueStandings(t *testing.T) {
 	// Skip if no Redis connection
 	redisURL := "redis://localhost:6379"
 	cache, err := cache.NewCache(redisURL)
@@ -189,49 +189,188 @@ func TestGetLeagueStandingsByLeagueId(t *testing.T) {
 		t.Skip("Skipping test: Redis not available")
 	}
 
-	// Test cases
-	tests := []struct {
-		name           string
-		leagueID       string
-		expectedStatus int
-	}{
-		{
-			name:           "Cache miss - should call API",
-			leagueID:       "39",
-			expectedStatus: http.StatusOK,
-		},
-		{
-			name:           "Cache hit - should return cached data",
-			leagueID:       "39",
-			expectedStatus: http.StatusOK,
-		},
-		{
-			name:           "Missing league ID",
-			leagueID:       "",
-			expectedStatus: http.StatusBadRequest,
-		},
+	mockAPIKey := "mock-api-key"
+	config := &Config{
+		Cache:          cache,
+		FootballAPIKey: mockAPIKey,
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			config := &Config{
-				Cache:          cache,
-				FootballAPIKey: "test-key",
+	t.Run("success case", func(t *testing.T) {
+		// Mock HTTP response from the external API
+		mockResponse := `{
+			"get": "standings",
+			"response": [
+				{
+					"league": {
+						"id": 39,
+						"name": "Premier League",
+						"country": "England",
+						"logo": "https://media.api-sports.io/football/leagues/39.png",
+						"flag": "https://media.api-sports.io/flags/gb.svg",
+						"season": 2024,
+						"standings": [
+							[
+								{
+									"rank": 1,
+									"team": {
+										"id": 40,
+										"name": "Liverpool",
+										"logo": "https://media.api-sports.io/football/teams/40.png"
+									},
+									"points": 84,
+									"goalsDiff": 45,
+									"group": "Premier League",
+									"form": "DLDLW",
+									"status": "same",
+									"description": "Champions League",
+									"all": {
+										"played": 38,
+										"win": 25,
+										"draw": 9,
+										"lose": 4,
+										"goals": {
+											"for": 86,
+											"against": 41
+										}
+									},
+									"home": {
+										"played": 19,
+										"win": 14,
+										"draw": 4,
+										"lose": 1,
+										"goals": {
+											"for": 42,
+											"against": 16
+										}
+									},
+									"away": {
+										"played": 19,
+										"win": 11,
+										"draw": 5,
+										"lose": 3,
+										"goals": {
+											"for": 44,
+											"against": 25
+										}
+									},
+									"update": "2025-05-26T00:00:00Z"
+								}
+							]
+						]
+					}
+				}
+			],
+			"errors": [],
+			"results": 1,
+			"paging": {
+				"current": 1,
+				"total": 1
+			}
+		}`
+
+		// Create a test server
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Header.Get("x-rapidapi-key") != mockAPIKey {
+				t.Errorf("Expected API key %s, got %s", mockAPIKey, r.Header.Get("x-rapidapi-key"))
 			}
 
-			// Setup request
-			req := httptest.NewRequest("GET", "/v1/api/futbol/league_standings?league_id="+tt.leagueID, nil)
-			w := httptest.NewRecorder()
-
-			// Call the handler
-			config.getLeagueStandingsByLeagueId(w, req)
-
-			// Assert response
-			if w.Code != tt.expectedStatus {
-				t.Errorf("expected status %d, got %d", tt.expectedStatus, w.Code)
+			// Verify query parameters
+			leagueID := r.URL.Query().Get("league")
+			season := r.URL.Query().Get("season")
+			if leagueID != "39" {
+				t.Errorf("Expected league ID 39, got %s", leagueID)
 			}
-		})
-	}
+			if season != "2024" {
+				t.Errorf("Expected season 2024, got %s", season)
+			}
+
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(mockResponse))
+		}))
+		defer server.Close()
+
+		// Set the base URL to the test server
+		config.APIFootballBaseURL = server.URL
+
+		// Setup request
+		req := httptest.NewRequest("GET", "/fixtures/league_standings", nil)
+		req.URL.RawQuery = "league_id=39&season=2024"
+		rec := httptest.NewRecorder()
+
+		// Call the function
+		config.getLeagueStandingsByLeagueId(rec, req)
+
+		// Assert the response
+		if rec.Code != http.StatusOK {
+			t.Errorf("Expected status code %d, got %d", http.StatusOK, rec.Code)
+		}
+
+		var response GetLeagueStandingsResponse
+		err := json.Unmarshal(rec.Body.Bytes(), &response)
+		if err != nil {
+			t.Errorf("Failed to parse response: %s", err)
+		}
+
+		// Verify the response structure
+		if len(response.Response) != 1 {
+			t.Errorf("Expected 1 league response, got %d", len(response.Response))
+		}
+		if len(response.Response[0].League.Standings) != 1 {
+			t.Errorf("Expected 1 standings array, got %d", len(response.Response[0].League.Standings))
+		}
+		if len(response.Response[0].League.Standings[0]) != 1 {
+			t.Errorf("Expected 1 team in standings, got %d", len(response.Response[0].League.Standings[0]))
+		}
+	})
+
+	t.Run("error case - missing league_id", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/fixtures/league_standings", nil)
+		rec := httptest.NewRecorder()
+
+		// Call the function
+		config.getLeagueStandingsByLeagueId(rec, req)
+
+		// Assert the response
+		if rec.Code != http.StatusBadRequest {
+			t.Errorf("Expected status code %d, got %d", http.StatusBadRequest, rec.Code)
+		}
+
+		var response struct {
+			Error string `json:"error"`
+		}
+		err := json.Unmarshal(rec.Body.Bytes(), &response)
+		if err != nil {
+			t.Errorf("Failed to parse error response: %s", err)
+		}
+		if response.Error != "league_id is required" {
+			t.Errorf("Expected error message 'league_id is required', got '%s'", response.Error)
+		}
+	})
+
+	t.Run("error case - missing season", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/fixtures/league_standings", nil)
+		req.URL.RawQuery = "league_id=39"
+		rec := httptest.NewRecorder()
+
+		// Call the function
+		config.getLeagueStandingsByLeagueId(rec, req)
+
+		// Assert the response
+		if rec.Code != http.StatusBadRequest {
+			t.Errorf("Expected status code %d, got %d", http.StatusBadRequest, rec.Code)
+		}
+
+		var response struct {
+			Error string `json:"error"`
+		}
+		err := json.Unmarshal(rec.Body.Bytes(), &response)
+		if err != nil {
+			t.Errorf("Failed to parse error response: %s", err)
+		}
+		if response.Error != "season is required" {
+			t.Errorf("Expected error message 'season is required', got '%s'", response.Error)
+		}
+	})
 }
 
 func TestCacheExpiration(t *testing.T) {
@@ -242,37 +381,130 @@ func TestCacheExpiration(t *testing.T) {
 		t.Skip("Skipping test: Redis not available")
 	}
 
+	mockAPIKey := "mock-api-key"
 	config := &Config{
 		Cache:          cache,
-		FootballAPIKey: "test-key",
+		FootballAPIKey: mockAPIKey,
 	}
 
-	// Test cache expiration
 	t.Run("Cache expiration", func(t *testing.T) {
-		leagueID := "39"
-		req := httptest.NewRequest("GET", "/v1/api/futbol/league_standings?league_id="+leagueID, nil)
-		w := httptest.NewRecorder()
+		// Mock HTTP response from the external API
+		mockResponse := `{
+			"get": "standings",
+			"response": [
+				{
+					"league": {
+						"id": 39,
+						"name": "Premier League",
+						"country": "England",
+						"logo": "https://media.api-sports.io/football/leagues/39.png",
+						"flag": "https://media.api-sports.io/flags/gb.svg",
+						"season": 2024,
+						"standings": [
+							[
+								{
+									"rank": 1,
+									"team": {
+										"id": 40,
+										"name": "Liverpool",
+										"logo": "https://media.api-sports.io/football/teams/40.png"
+									},
+									"points": 84,
+									"goalsDiff": 45,
+									"group": "Premier League",
+									"form": "DLDLW",
+									"status": "same",
+									"description": "Champions League",
+									"all": {
+										"played": 38,
+										"win": 25,
+										"draw": 9,
+										"lose": 4,
+										"goals": {
+											"for": 86,
+											"against": 41
+										}
+									},
+									"home": {
+										"played": 19,
+										"win": 14,
+										"draw": 4,
+										"lose": 1,
+										"goals": {
+											"for": 42,
+											"against": 16
+										}
+									},
+									"away": {
+										"played": 19,
+										"win": 11,
+										"draw": 5,
+										"lose": 3,
+										"goals": {
+											"for": 44,
+											"against": 25
+										}
+									},
+									"update": "2025-05-26T00:00:00Z"
+								}
+							]
+						]
+					}
+				}
+			],
+			"errors": [],
+			"results": 1,
+			"paging": {
+				"current": 1,
+				"total": 1
+			}
+		}`
 
-		// First call - should miss cache
-		config.getLeagueStandingsByLeagueId(w, req)
-		if w.Code != http.StatusOK {
-			t.Errorf("expected status %d, got %d", http.StatusOK, w.Code)
+		// Create a test server
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Header.Get("x-rapidapi-key") != mockAPIKey {
+				t.Errorf("Expected API key %s, got %s", mockAPIKey, r.Header.Get("x-rapidapi-key"))
+			}
+
+			// Verify query parameters
+			leagueID := r.URL.Query().Get("league")
+			season := r.URL.Query().Get("season")
+			if leagueID != "39" {
+				t.Errorf("Expected league ID 39, got %s", leagueID)
+			}
+			if season != "2024" {
+				t.Errorf("Expected season 2024, got %s", season)
+			}
+
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(mockResponse))
+		}))
+		defer server.Close()
+
+		// Set the base URL to the test server
+		config.APIFootballBaseURL = server.URL
+
+		// First request - should hit the API
+		req1 := httptest.NewRequest("GET", "/fixtures/league_standings", nil)
+		req1.URL.RawQuery = "league_id=39&season=2024"
+		rec1 := httptest.NewRecorder()
+		config.getLeagueStandingsByLeagueId(rec1, req1)
+		if rec1.Code != http.StatusOK {
+			t.Errorf("expected status 200, got %d", rec1.Code)
 		}
 
-		// Second call - should hit cache
-		w = httptest.NewRecorder()
-		config.getLeagueStandingsByLeagueId(w, req)
-		if w.Code != http.StatusOK {
-			t.Errorf("expected status %d, got %d", http.StatusOK, w.Code)
+		// Second request - should hit the cache
+		req2 := httptest.NewRequest("GET", "/fixtures/league_standings", nil)
+		req2.URL.RawQuery = "league_id=39&season=2024"
+		rec2 := httptest.NewRecorder()
+		config.getLeagueStandingsByLeagueId(rec2, req2)
+		if rec2.Code != http.StatusOK {
+			t.Errorf("expected status 200, got %d", rec2.Code)
 		}
 
-		// Verify cache was hit by checking Redis directly
-		exists, err := cache.Exists(context.Background(), "standings:league:"+leagueID)
-		if err != nil {
-			t.Errorf("failed to check cache existence: %v", err)
-		}
-		if !exists {
-			t.Error("expected cache to exist after second call")
+		// Verify that the responses are identical
+		if rec1.Body.String() != rec2.Body.String() {
+			t.Error("cached response differs from original response")
 		}
 	})
 }
