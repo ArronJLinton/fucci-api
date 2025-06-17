@@ -2,89 +2,116 @@
 
 ### GET /v1/api/futbol/league_standings
 
-Returns the current standings for a specific league.
+Returns the standings for a specific league and season.
 
 #### Query Parameters
 
-| Parameter | Type   | Required | Description                   |
-| --------- | ------ | -------- | ----------------------------- |
-| league_id | string | Yes      | The ID of the league to query |
+| Parameter | Type   | Required | Description                    |
+| --------- | ------ | -------- | ------------------------------ |
+| league_id | string | Yes      | The ID of the league to query  |
+| season    | string | Yes      | The season year (e.g., "2024") |
 
 #### Common League IDs
 
-- 2021: Premier League (England)
-- 2014: La Liga (Spain)
-- 2019: Serie A (Italy)
-- 2002: Bundesliga (Germany)
-- 2015: Ligue 1 (France)
+- 39: Premier League (England)
+- 140: La Liga (Spain)
+- 135: Serie A (Italy)
+- 78: Bundesliga (Germany)
+- 61: Ligue 1 (France)
 
 #### Example Requests
 
-1. Get Premier League standings:
+1. Get Premier League standings for 2024:
 
 ```bash
-curl "http://localhost:8080/v1/api/futbol/league_standings?league_id=2021"
+curl "http://localhost:8080/v1/api/futbol/league_standings?league_id=39&season=2024"
 ```
 
-2. Get La Liga standings:
+2. Get La Liga standings for 2024:
 
 ```bash
-curl "http://localhost:8080/v1/api/futbol/league_standings?league_id=2014"
+curl "http://localhost:8080/v1/api/futbol/league_standings?league_id=140&season=2024"
 ```
 
-3. Get Serie A standings:
+3. Get Serie A standings for 2024:
 
 ```bash
-curl "http://localhost:8080/v1/api/futbol/league_standings?league_id=2019"
+curl "http://localhost:8080/v1/api/futbol/league_standings?league_id=135&season=2024"
 ```
 
 #### Example Response
 
 ```json
-[
-  {
-    "rank": 1,
-    "team": {
-      "id": 50,
-      "name": "Manchester City",
-      "logo": "https://media.api-sports.io/football/teams/50.png"
-    },
-    "points": 82,
-    "goalsDiff": 58,
-    "form": "WWDLW",
-    "all": {
-      "played": 35,
-      "win": 26,
-      "draw": 4,
-      "lose": 5,
-      "goals": {
-        "for": 89,
-        "against": 31
-      }
-    },
-    "home": {
-      "played": 17,
-      "win": 14,
-      "draw": 2,
-      "lose": 1,
-      "goals": {
-        "for": 48,
-        "against": 15
-      }
-    },
-    "away": {
-      "played": 18,
-      "win": 12,
-      "draw": 2,
-      "lose": 4,
-      "goals": {
-        "for": 41,
-        "against": 16
+{
+  "get": "standings",
+  "response": [
+    {
+      "league": {
+        "id": 39,
+        "name": "Premier League",
+        "country": "England",
+        "logo": "https://media.api-sports.io/football/leagues/39.png",
+        "flag": "https://media.api-sports.io/flags/gb.svg",
+        "season": 2024,
+        "standings": [
+          [
+            {
+              "rank": 1,
+              "team": {
+                "id": 40,
+                "name": "Liverpool",
+                "logo": "https://media.api-sports.io/football/teams/40.png"
+              },
+              "points": 84,
+              "goalsDiff": 45,
+              "group": "Premier League",
+              "form": "DLDLW",
+              "status": "same",
+              "description": "Champions League",
+              "all": {
+                "played": 38,
+                "win": 25,
+                "draw": 9,
+                "lose": 4,
+                "goals": {
+                  "for": 86,
+                  "against": 41
+                }
+              },
+              "home": {
+                "played": 19,
+                "win": 14,
+                "draw": 4,
+                "lose": 1,
+                "goals": {
+                  "for": 42,
+                  "against": 16
+                }
+              },
+              "away": {
+                "played": 19,
+                "win": 11,
+                "draw": 5,
+                "lose": 3,
+                "goals": {
+                  "for": 44,
+                  "against": 25
+                }
+              },
+              "update": "2025-05-26T00:00:00Z"
+            }
+          ]
+        ]
       }
     }
+  ],
+  "errors": [],
+  "results": 1,
+  "paging": {
+    "current": 1,
+    "total": 1
   }
-  // ... more teams
-]
+}
 ```
 
 #### Error Responses
@@ -97,7 +124,15 @@ curl "http://localhost:8080/v1/api/futbol/league_standings?league_id=2019"
 }
 ```
 
-2. League not found:
+2. Missing season:
+
+```json
+{
+  "error": "season is required"
+}
+```
+
+3. League not found:
 
 ```json
 {
@@ -105,7 +140,7 @@ curl "http://localhost:8080/v1/api/futbol/league_standings?league_id=2019"
 }
 ```
 
-3. No standings data:
+4. No standings data:
 
 ```json
 {
@@ -119,3 +154,6 @@ curl "http://localhost:8080/v1/api/futbol/league_standings?league_id=2019"
 - Each team entry includes their current form (last 5 matches)
 - Home and away statistics are provided separately
 - The response includes detailed goal statistics for both home and away matches
+- The season parameter is required and should be specified as a 4-digit year (e.g., "2024")
+- The response includes league information such as name, country, and logo
+- The standings array may contain multiple groups (e.g., for leagues with multiple divisions)
