@@ -33,6 +33,7 @@ func InitConfig(logger *otelzap.Logger) Config {
 	return Config{
 		DB_URL:           viper.GetString("db_url"),
 		FOOTBALL_API_KEY: viper.GetString("football_api_key"),
+		RAPID_API_KEY:    viper.GetString("rapid_api_key"),
 		REDIS_URL:        viper.GetString("redis_url"),
 	}
 }
