@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"time"
 )
 
 type GoogleNewsResponse struct {
@@ -57,7 +58,7 @@ func (c *Config) search(w http.ResponseWriter, r *http.Request) {
 	req.Header.Add("x-rapidapi-host", "google-news13.p.rapidapi.com")
 
 	// Make the request
-	client := &http.Client{}
+	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
 		log.Printf("Error making request: %v", err)
