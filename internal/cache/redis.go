@@ -78,6 +78,22 @@ func (c *Cache) Delete(ctx context.Context, key string) error {
 	return c.client.Del(ctx, key).Err()
 }
 
+// DeletePattern removes all keys matching a pattern
+func (c *Cache) DeletePattern(ctx context.Context, pattern string) error {
+	iter := c.client.Scan(ctx, 0, pattern, 0).Iterator()
+	for iter.Next(ctx) {
+		if err := c.client.Del(ctx, iter.Val()).Err(); err != nil {
+			return fmt.Errorf("failed to delete key %s: %v", iter.Val(), err)
+		}
+	}
+	return iter.Err()
+}
+
+// FlushAll removes all keys from the cache
+func (c *Cache) FlushAll(ctx context.Context) error {
+	return c.client.FlushAll(ctx).Err()
+}
+
 // Exists checks if a key exists in the cache
 func (c *Cache) Exists(ctx context.Context, key string) (bool, error) {
 	result, err := c.client.Exists(ctx, key).Result()
@@ -116,4 +132,37 @@ func (c *Cache) HealthCheck(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// GetStats returns basic cache statistics
+func (c *Cache) GetStats(ctx context.Context) (map[string]interface{}, error) {
+	info, err := c.client.Info(ctx).Result()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get Redis info: %v", err)
+	}
+
+	// Parse basic stats from info
+	stats := make(map[string]interface{})
+	lines := strings.Split(info, "\n")
+	for _, line := range lines {
+		if strings.HasPrefix(line, "db0:") {
+			stats["database"] = line
+		}
+		if strings.HasPrefix(line, "used_memory_human:") {
+			stats["memory_used"] = strings.TrimPrefix(line, "used_memory_human:")
+		}
+		if strings.HasPrefix(line, "connected_clients:") {
+			stats["connected_clients"] = strings.TrimPrefix(line, "connected_clients:")
+		}
+	}
+
+	// Get total keys
+	keys, err := c.client.DBSize(ctx).Result()
+	if err != nil {
+		stats["total_keys"] = "unknown"
+	} else {
+		stats["total_keys"] = keys
+	}
+
+	return stats, nil
 }
