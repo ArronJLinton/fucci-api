@@ -934,3 +934,121 @@ func TestCacheErrorHandling(t *testing.T) {
 		}
 	})
 }
+
+func TestGetTeamSquad(t *testing.T) {
+	// Skip if no Redis connection
+	redisURL := "redis://localhost:6379"
+	cache, err := cache.NewCache(redisURL)
+	if err != nil {
+		t.Skip("Skipping test: Redis not available")
+	}
+
+	// Clear cache before test to ensure clean state
+	ctx := context.Background()
+	cache.FlushAll(ctx)
+
+	mockAPIKey := "mock-api-key"
+	config := &Config{
+		Cache:          cache,
+		FootballAPIKey: mockAPIKey,
+	}
+
+	t.Run("success case", func(t *testing.T) {
+		// Mock squad response
+		mockSquadResponse := `{
+			"response": [
+				{
+					"team": {"id": 1},
+					"players": [
+						{"id": 1, "name": "Player 1", "number": 1, "pos": "G", "grid": "", "photo": "photo1.jpg"},
+						{"id": 2, "name": "Player 2", "number": 2, "pos": "D", "grid": "", "photo": "photo2.jpg"}
+					]
+				}
+			]
+		}`
+
+		// Create a test server
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Header.Get("x-rapidapi-key") != mockAPIKey {
+				t.Errorf("Expected API key %s, got %s", mockAPIKey, r.Header.Get("x-rapidapi-key"))
+			}
+
+			// Verify the URL contains the team ID
+			if !strings.Contains(r.URL.Path, "players/squads") {
+				t.Errorf("Expected URL to contain 'players/squads', got %s", r.URL.Path)
+			}
+			if !strings.Contains(r.URL.RawQuery, "team=1") {
+				t.Errorf("Expected query to contain 'team=1', got %s", r.URL.RawQuery)
+			}
+
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(mockSquadResponse))
+		}))
+		defer server.Close()
+
+		// Set the base URL to the test server
+		config.APIFootballBaseURL = server.URL
+
+		// Call the function
+		squad, err := config.getTeamSquad(1, ctx)
+		if err != nil {
+			t.Errorf("Expected no error, got %v", err)
+		}
+
+		// Verify the response
+		if len(squad.Response) != 1 {
+			t.Errorf("Expected 1 team response, got %d", len(squad.Response))
+		}
+		if len(squad.Response[0].Players) != 2 {
+			t.Errorf("Expected 2 players, got %d", len(squad.Response[0].Players))
+		}
+
+		// Verify cache was set
+		exists, err := cache.Exists(ctx, "team_squad:1")
+		if err != nil || !exists {
+			t.Error("Team squad should be cached")
+		}
+	})
+
+	t.Run("cache hit case", func(t *testing.T) {
+		// The squad should already be cached from the previous test
+		squad, err := config.getTeamSquad(1, ctx)
+		if err != nil {
+			t.Errorf("Expected no error, got %v", err)
+		}
+
+		// Verify the response
+		if len(squad.Response) != 1 {
+			t.Errorf("Expected 1 team response, got %d", len(squad.Response))
+		}
+		if len(squad.Response[0].Players) != 2 {
+			t.Errorf("Expected 2 players, got %d", len(squad.Response[0].Players))
+		}
+	})
+
+	t.Run("empty response case", func(t *testing.T) {
+		// Mock empty squad response
+		mockEmptyResponse := `{
+			"response": []
+		}`
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(mockEmptyResponse))
+		}))
+		defer server.Close()
+
+		config.APIFootballBaseURL = server.URL
+
+		// Call the function
+		squad, err := config.getTeamSquad(999, ctx)
+		if err != nil {
+			t.Errorf("Expected no error, got %v", err)
+		}
+
+		// Verify the response is empty
+		if len(squad.Response) != 0 {
+			t.Errorf("Expected 0 team responses, got %d", len(squad.Response))
+		}
+	})
+}
