@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"net/url"
 	"time"
+
+	"github.com/ArronJLinton/fucci-api/internal/cache"
 )
 
 type GoogleNewsResponse struct {
@@ -26,6 +28,8 @@ type GoogleNewsResponse struct {
 }
 
 func (c *Config) search(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
 	// Get query parameter from request
 	query := r.URL.Query().Get("q")
 	if query == "" {
@@ -37,6 +41,23 @@ func (c *Config) search(w http.ResponseWriter, r *http.Request) {
 	language := r.URL.Query().Get("lr")
 	if language == "" {
 		language = "en-US"
+	}
+
+	// Generate cache key
+	cacheKey := fmt.Sprintf("google_news:%s:%s", query, language)
+
+	// Try to get from cache first
+	var newsResponse GoogleNewsResponse
+	exists, err := c.Cache.Exists(ctx, cacheKey)
+	if err != nil {
+		log.Printf("Cache check error: %v\n", err)
+	} else if exists {
+		err = c.Cache.Get(ctx, cacheKey, &newsResponse)
+		if err == nil {
+			respondWithJSON(w, http.StatusOK, newsResponse)
+			return
+		}
+		log.Printf("Cache get error: %v\n", err)
 	}
 
 	// Construct the URL
@@ -83,11 +104,16 @@ func (c *Config) search(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Parse JSON response
-	var newsResponse GoogleNewsResponse
 	if err := json.Unmarshal(body, &newsResponse); err != nil {
 		log.Printf("Error parsing JSON: %v", err)
 		respondWithError(w, http.StatusInternalServerError, "Failed to parse response")
 		return
+	}
+
+	// Cache the response for 30 minutes (news data changes frequently)
+	err = c.Cache.Set(ctx, cacheKey, newsResponse, cache.NewsTTL)
+	if err != nil {
+		log.Printf("Cache set error: %v\n", err)
 	}
 
 	// Return the response
