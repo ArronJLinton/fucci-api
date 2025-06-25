@@ -378,8 +378,9 @@ func (c *Config) getTeamSquad(id int32) (*GetSquadResponse, error) {
 func (c *Config) getLeagues(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	// Generate cache key
-	cacheKey := "leagues:2025"
+	// Derive current year dynamically
+	currentYear := time.Now().Year()
+	cacheKey := fmt.Sprintf("leagues:%d", currentYear)
 
 	// Try to get from cache first
 	var data GetLeaguesResponse
