@@ -170,12 +170,12 @@ func (c *Config) getMatchLineup(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Use the same base URL for squad requests
-	homeTeamSquad, err := c.getTeamSquad(int32(getLineUpData.Response[0].Team.ID))
+	homeTeamSquad, err := c.getTeamSquad(int32(getLineUpData.Response[0].Team.ID), ctx)
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest, fmt.Sprintf("Failed to get team squad: %s", err))
 		return
 	}
-	awayTeamSquad, err := c.getTeamSquad(int32(getLineUpData.Response[1].Team.ID))
+	awayTeamSquad, err := c.getTeamSquad(int32(getLineUpData.Response[1].Team.ID), ctx)
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest, fmt.Sprintf("Failed to get team squad: %s", err))
 		return
@@ -325,9 +325,7 @@ func normalizeName(name string) string {
 	return name
 }
 
-func (c *Config) getTeamSquad(id int32) (*GetSquadResponse, error) {
-	ctx := context.Background()
-
+func (c *Config) getTeamSquad(id int32, ctx context.Context) (*GetSquadResponse, error) {
 	// Generate cache key
 	cacheKey := fmt.Sprintf("team_squad:%d", id)
 
