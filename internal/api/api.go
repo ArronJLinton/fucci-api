@@ -13,6 +13,7 @@ type Config struct {
 	DB                 *database.Queries
 	DBConn             *sql.DB
 	FootballAPIKey     string
+	RapidAPIKey        string
 	Cache              *cache.Cache
 	APIFootballBaseURL string
 }

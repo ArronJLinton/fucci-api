@@ -68,6 +68,7 @@ func main() {
 		DB:             dbQueries,
 		DBConn:         conn,
 		FootballAPIKey: c.FOOTBALL_API_KEY,
+		RapidAPIKey:    c.RAPID_API_KEY,
 		Cache:          redisCache,
 	}
 	apiRouter := api.New(apiCfg)
