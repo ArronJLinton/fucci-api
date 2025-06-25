@@ -81,8 +81,10 @@ func (c *Config) search(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Debug: Log the raw response
-	log.Printf("Raw API response: %s", string(body))
+	// Debug: Log the raw response if DebugMode is enabled
+	if c.DebugMode {
+		log.Printf("Raw API response: %s", string(body))
+	}
 
 	// Parse JSON response
 	var newsResponse GoogleNewsResponse
