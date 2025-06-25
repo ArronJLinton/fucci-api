@@ -57,6 +57,19 @@ func (c *Config) HandleRedisHealth(w http.ResponseWriter, r *http.Request) {
 	respondWithJSON(w, http.StatusOK, HealthResponse{Message: "Redis health check passed"})
 }
 
+func (c *Config) HandleCacheStats(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	stats, err := c.Cache.GetStats(ctx)
+	if err != nil {
+		respondWithError(w, http.StatusServiceUnavailable, fmt.Sprintf("Failed to get cache stats: %v", err))
+		return
+	}
+
+	respondWithJSON(w, http.StatusOK, stats)
+}
+
 func HandleError(w http.ResponseWriter, r *http.Request) {
 	respondWithError(w, http.StatusInternalServerError, "Something went wrong.")
 }

@@ -14,7 +14,7 @@ type Config struct {
 	DBConn             *sql.DB
 	FootballAPIKey     string
 	RapidAPIKey        string
-	Cache              *cache.Cache
+	Cache              cache.CacheInterface
 	APIFootballBaseURL string
 }
 
@@ -24,6 +24,7 @@ func New(c Config) http.Handler {
 	// Health check routes
 	router.Get("/health", HandleReadiness)
 	router.Get("/health/redis", c.HandleRedisHealth)
+	router.Get("/health/cache-stats", c.HandleCacheStats)
 
 	userRouter := chi.NewRouter()
 	userRouter.Post("/create", c.handleCreateUser)
