@@ -345,11 +345,7 @@ func (pg *PromptGenerator) callOpenAI(ctx context.Context, request OpenAIRequest
 		return nil, err
 	}
 
-	// Debug logging
 	apiURL := fmt.Sprintf("%s/chat/completions", pg.OpenAIBaseURL)
-	fmt.Printf("DEBUG: OpenAI API URL: %s\n", apiURL)
-	fmt.Printf("DEBUG: OpenAI Request Payload: %s\n", string(jsonData))
-
 	req, err := http.NewRequestWithContext(ctx, "POST", apiURL, strings.NewReader(string(jsonData)))
 	if err != nil {
 		return nil, err
