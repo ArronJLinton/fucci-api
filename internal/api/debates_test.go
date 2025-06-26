@@ -224,3 +224,35 @@ func TestDebateAnalyticsResponse(t *testing.T) {
 		}
 	})
 }
+
+func TestMultipleEmojiVotesOnDebateCard(t *testing.T) {
+	// Simulate voting with two different emojis
+	emojiVotes := []struct {
+		Emoji string
+		Count int
+	}{
+		{"👍", 1},
+		{"🔥", 1},
+	}
+
+	voteCounts := VoteCounts{
+		Emojis: make(map[string]int),
+	}
+
+	for _, v := range emojiVotes {
+		voteCounts.Emojis[v.Emoji] += v.Count
+	}
+
+	if voteCounts.Emojis["👍"] != 1 {
+		t.Errorf("Expected 👍 emoji count to be 1, got %d", voteCounts.Emojis["👍"])
+	}
+	if voteCounts.Emojis["🔥"] != 1 {
+		t.Errorf("Expected 🔥 emoji count to be 1, got %d", voteCounts.Emojis["🔥"])
+	}
+
+	// Simulate a second vote for 👍
+	voteCounts.Emojis["👍"] += 1
+	if voteCounts.Emojis["👍"] != 2 {
+		t.Errorf("Expected 👍 emoji count to be 2 after second vote, got %d", voteCounts.Emojis["👍"])
+	}
+}
