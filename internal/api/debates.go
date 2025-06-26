@@ -259,7 +259,7 @@ func (c *Config) getDebate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Add analytics if available
-	if analytics != nil {
+	if err == nil {
 		engagementScore := 0.0
 		if analytics.EngagementScore.Valid {
 			// Parse engagement score from string

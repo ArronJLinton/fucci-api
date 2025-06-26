@@ -10,9 +10,7 @@
 
 # Go binary files
 fucci-api
-main
-api
-server
+
 
 # Test binary, built with `go test -c`
 *.test
