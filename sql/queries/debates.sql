@@ -48,7 +48,7 @@ DELETE FROM debate_cards WHERE id = $1;
 -- name: CreateVote :one
 INSERT INTO votes (debate_card_id, user_id, vote_type, emoji)
 VALUES ($1, $2, $3, $4)
-ON CONFLICT (debate_card_id, user_id, vote_type) 
+ON CONFLICT (debate_card_id, user_id, vote_type, emoji) 
 DO UPDATE SET emoji = $4, created_at = CURRENT_TIMESTAMP
 RETURNING *;
 
