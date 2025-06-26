@@ -233,7 +233,7 @@ func (c *Config) getDebate(w http.ResponseWriter, r *http.Request) {
 					if counts.Emojis == nil {
 						counts.Emojis = make(map[string]int)
 					}
-					counts.Emojis["👍"] = int(vc.Count)
+					counts.Emojis[vc.Emoji] = int(vc.Count)
 				}
 				voteCountsMap[vc.DebateCardID.Int32] = counts
 			}
