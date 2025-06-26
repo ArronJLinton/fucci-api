@@ -31,7 +31,7 @@ CREATE TABLE IF NOT EXISTS votes (
     vote_type VARCHAR(10) NOT NULL CHECK (vote_type IN ('upvote', 'downvote', 'emoji')),
     emoji VARCHAR(10), -- For emoji votes
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(debate_card_id, user_id, vote_type)
+    UNIQUE(debate_card_id, user_id, vote_type, emoji)
 );
 
 -- Create comments table for text-based discussions
