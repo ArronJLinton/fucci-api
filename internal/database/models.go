@@ -5,8 +5,51 @@
 package database
 
 import (
+	"database/sql"
 	"time"
 )
+
+type Comment struct {
+	ID              int32
+	DebateID        sql.NullInt32
+	ParentCommentID sql.NullInt32
+	UserID          sql.NullInt32
+	Content         string
+	CreatedAt       sql.NullTime
+	UpdatedAt       sql.NullTime
+}
+
+type Debate struct {
+	ID          int32
+	MatchID     string
+	DebateType  string
+	Headline    string
+	Description sql.NullString
+	AiGenerated sql.NullBool
+	CreatedAt   sql.NullTime
+	UpdatedAt   sql.NullTime
+}
+
+type DebateAnalytic struct {
+	ID              int32
+	DebateID        sql.NullInt32
+	TotalVotes      sql.NullInt32
+	TotalComments   sql.NullInt32
+	EngagementScore sql.NullString
+	CreatedAt       sql.NullTime
+	UpdatedAt       sql.NullTime
+}
+
+type DebateCard struct {
+	ID          int32
+	DebateID    sql.NullInt32
+	Stance      string
+	Title       string
+	Description sql.NullString
+	AiGenerated sql.NullBool
+	CreatedAt   sql.NullTime
+	UpdatedAt   sql.NullTime
+}
 
 type Medium struct {
 	ID        int32
@@ -32,4 +75,13 @@ type User struct {
 	Email     string
 	CreatedAt time.Time
 	UpdatedAt time.Time
+}
+
+type Vote struct {
+	ID           int32
+	DebateCardID sql.NullInt32
+	UserID       sql.NullInt32
+	VoteType     string
+	Emoji        sql.NullString
+	CreatedAt    sql.NullTime
 }

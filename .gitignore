@@ -8,6 +8,10 @@
 *.so
 *.dylib
 
+# Go binary files
+fucci-api
+
+
 # Test binary, built with `go test -c`
 *.test
 

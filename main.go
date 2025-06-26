@@ -70,6 +70,8 @@ func main() {
 		FootballAPIKey: c.FOOTBALL_API_KEY,
 		RapidAPIKey:    c.RAPID_API_KEY,
 		Cache:          redisCache,
+		OpenAIKey:      c.OPENAI_API_KEY,
+		OpenAIBaseURL:  c.OPENAI_BASE_URL,
 	}
 	apiRouter := api.New(apiCfg)
 	v1Router.Mount("/api", apiRouter)
