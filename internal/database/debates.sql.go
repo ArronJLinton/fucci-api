@@ -598,15 +598,17 @@ const getVoteCounts = `-- name: GetVoteCounts :many
 SELECT 
     debate_card_id,
     vote_type,
+    emoji,
     COUNT(*) as count
 FROM votes 
 WHERE debate_card_id = ANY($1::int[])
-GROUP BY debate_card_id, vote_type
+GROUP BY debate_card_id, vote_type, emoji
 `
 
 type GetVoteCountsRow struct {
 	DebateCardID sql.NullInt32
 	VoteType     string
+	Emoji        sql.NullString
 	Count        int64
 }
 
@@ -619,7 +621,12 @@ func (q *Queries) GetVoteCounts(ctx context.Context, dollar_1 []int32) ([]GetVot
 	var items []GetVoteCountsRow
 	for rows.Next() {
 		var i GetVoteCountsRow
-		if err := rows.Scan(&i.DebateCardID, &i.VoteType, &i.Count); err != nil {
+		if err := rows.Scan(
+			&i.DebateCardID,
+			&i.VoteType,
+			&i.Emoji,
+			&i.Count,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

@@ -35,7 +35,7 @@ type DebateAnalytic struct {
 	DebateID        sql.NullInt32
 	TotalVotes      sql.NullInt32
 	TotalComments   sql.NullInt32
-	EngagementScore sql.NullFloat64
+	EngagementScore sql.NullString
 	CreatedAt       sql.NullTime
 	UpdatedAt       sql.NullTime
 }

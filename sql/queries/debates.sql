@@ -65,10 +65,11 @@ DELETE FROM votes WHERE debate_card_id = $1 AND user_id = $2 AND vote_type = $3;
 SELECT 
     debate_card_id,
     vote_type,
+    emoji,
     COUNT(*) as count
 FROM votes 
 WHERE debate_card_id = ANY($1::int[])
-GROUP BY debate_card_id, vote_type;
+GROUP BY debate_card_id, vote_type, emoji;
 
 -- name: CreateComment :one
 INSERT INTO comments (debate_id, parent_comment_id, user_id, content)
