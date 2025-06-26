@@ -21,6 +21,7 @@ func InitConfig(logger *otelzap.Logger) Config {
 	// Set defaults
 	viper.SetDefault("db_url", "")
 	viper.SetDefault("redis_url", "")
+	viper.SetDefault("openai_base_url", "https://api.openai.com/v1")
 
 	if err := viper.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
@@ -35,5 +36,7 @@ func InitConfig(logger *otelzap.Logger) Config {
 		FOOTBALL_API_KEY: viper.GetString("football_api_key"),
 		RAPID_API_KEY:    viper.GetString("rapid_api_key"),
 		REDIS_URL:        viper.GetString("redis_url"),
+		OPENAI_API_KEY:   viper.GetString("openai_api_key"),
+		OPENAI_BASE_URL:  viper.GetString("openai_base_url"),
 	}
 }
