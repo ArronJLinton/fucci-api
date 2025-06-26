@@ -224,7 +224,7 @@ func (dda *DebateDataAggregator) fetchMatchStats(ctx context.Context, matchID st
 
 	// Away team stats (second response)
 	awayStats := statsResponse.Response[1].Statistics
-	stats.AwayGoals = getNumericValue(awayStats, "Total Shots")
+	stats.AwayGoals = getNumericValue(awayStats, "Goals")
 	stats.AwayShots = getNumericValue(awayStats, "Total Shots")
 	stats.AwayPossession = getNumericValue(awayStats, "Ball Possession")
 	stats.AwayFouls = getNumericValue(awayStats, "Fouls")
