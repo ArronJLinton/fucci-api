@@ -487,6 +487,11 @@ func (c *Config) getComments(w http.ResponseWriter, r *http.Request) {
 func (c *Config) generateAIPrompt(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
+	if c.AIPromptGenerator == nil {
+		respondWithError(w, http.StatusNotImplemented, "AI prompt generation is not configured. Please set the OpenAI API key.")
+		return
+	}
+
 	matchID := r.URL.Query().Get("match_id")
 	promptType := r.URL.Query().Get("type") // "pre_match" or "post_match"
 
