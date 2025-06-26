@@ -134,7 +134,10 @@ func (pg *PromptGenerator) GeneratePreMatchPrompt(ctx context.Context, matchData
 	}
 
 	// Cache the result
-	pg.Cache.Set(ctx, cacheKey, prompt, 24*time.Hour)
+	err = pg.Cache.Set(ctx, cacheKey, prompt, 24*time.Hour)
+	if err != nil {
+		fmt.Printf("Failed to cache pre-match prompt: %v\n", err)
+	}
 
 	return prompt, nil
 }
