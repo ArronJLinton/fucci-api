@@ -258,12 +258,20 @@ func (c *Config) getDebate(w http.ResponseWriter, r *http.Request) {
 
 	// Add analytics if available
 	if err == nil {
+		engagementScore := 0.0
+		if analytics.EngagementScore.Valid {
+			// Parse engagement score from string
+			if score, err := strconv.ParseFloat(analytics.EngagementScore.String, 64); err == nil {
+				engagementScore = score
+			}
+		}
+
 		response.Analytics = &DebateAnalyticsResponse{
 			ID:              analytics.ID,
 			DebateID:        analytics.DebateID.Int32,
 			TotalVotes:      int(analytics.TotalVotes.Int32),
 			TotalComments:   int(analytics.TotalComments.Int32),
-			EngagementScore: 0.0, // Parse from string if needed
+			EngagementScore: engagementScore,
 			CreatedAt:       analytics.CreatedAt.Time,
 			UpdatedAt:       analytics.UpdatedAt.Time,
 		}
@@ -661,36 +669,50 @@ func (c *Config) updateDebateAnalytics(ctx context.Context, debateCardID int32) 
 	// Get the debate ID from the card
 	card, err := c.DB.GetDebateCard(ctx, debateCardID)
 	if err != nil {
-		fmt.Printf("Failed to get debate card for analytics update: %v\n", err)
+		fmt.Printf("Failed to get debate card: %v\n", err)
 		return
 	}
 
-	// Get vote count
-	voteCounts, err := c.DB.GetVoteCounts(ctx, []int32{debateCardID})
+	debateID := card.DebateID.Int32
+
+	// Get vote counts for all cards in this debate
+	cards, err := c.DB.GetDebateCards(ctx, sql.NullInt32{Int32: debateID, Valid: true})
 	if err != nil {
-		fmt.Printf("Failed to get vote counts for analytics: %v\n", err)
+		fmt.Printf("Failed to get debate cards: %v\n", err)
 		return
+	}
+
+	cardIDs := make([]int32, len(cards))
+	for i, card := range cards {
+		cardIDs[i] = card.ID
+	}
+
+	voteCounts, err := c.DB.GetVoteCounts(ctx, cardIDs)
+	if err != nil {
+		fmt.Printf("Failed to get vote counts: %v\n", err)
+		return
+	}
+
+	// Calculate total votes
+	totalVotes := 0
+	for _, vc := range voteCounts {
+		totalVotes += int(vc.Count)
 	}
 
 	// Get comment count
-	commentCount, err := c.DB.GetCommentCount(ctx, card.DebateID)
+	commentCount, err := c.DB.GetCommentCount(ctx, sql.NullInt32{Int32: debateID, Valid: true})
 	if err != nil {
-		fmt.Printf("Failed to get comment count for analytics: %v\n", err)
+		fmt.Printf("Failed to get comment count: %v\n", err)
 		return
 	}
 
-	// Calculate engagement score (simple formula - can be enhanced)
-	totalVotes := int32(0)
-	for _, vc := range voteCounts {
-		totalVotes += int32(vc.Count)
-	}
-
+	// Calculate engagement score (votes + comments * 2 for comment weight)
 	engagementScore := float64(totalVotes) + float64(commentCount)*2.0
 
 	// Update analytics
 	_, err = c.DB.UpdateDebateAnalytics(ctx, database.UpdateDebateAnalyticsParams{
-		DebateID:        card.DebateID,
-		TotalVotes:      sql.NullInt32{Int32: totalVotes, Valid: true},
+		DebateID:        sql.NullInt32{Int32: debateID, Valid: true},
+		TotalVotes:      sql.NullInt32{Int32: int32(totalVotes), Valid: true},
 		TotalComments:   sql.NullInt32{Int32: int32(commentCount), Valid: true},
 		EngagementScore: sql.NullString{String: fmt.Sprintf("%.2f", engagementScore), Valid: true},
 	})
