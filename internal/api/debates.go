@@ -526,30 +526,7 @@ func (c *Config) generateAIPrompt(w http.ResponseWriter, r *http.Request) {
 
 	// Use the data aggregator to get comprehensive match data
 	aggregator := NewDebateDataAggregator(c)
-	matchData, err := aggregator.AggregateMatchData(ctx, MatchDataRequest{
-		MatchID:         matchID,
-		HomeTeam:        matchInfo.HomeTeam,
-		AwayTeam:        matchInfo.AwayTeam,
-		Date:            matchInfo.Date,
-		Status:          matchInfo.Status,
-		HomeScore:       matchInfo.HomeScore,
-		AwayScore:       matchInfo.AwayScore,
-		HomeGoals:       matchInfo.HomeGoals,
-		AwayGoals:       matchInfo.AwayGoals,
-		HomeShots:       matchInfo.HomeShots,
-		AwayShots:       matchInfo.AwayShots,
-		HomePossession:  matchInfo.HomePossession,
-		AwayPossession:  matchInfo.AwayPossession,
-		HomeFouls:       matchInfo.HomeFouls,
-		AwayFouls:       matchInfo.AwayFouls,
-		HomeYellowCards: matchInfo.HomeYellowCards,
-		AwayYellowCards: matchInfo.AwayYellowCards,
-		HomeRedCards:    matchInfo.HomeRedCards,
-		AwayRedCards:    matchInfo.AwayRedCards,
-		Venue:           matchInfo.Venue,
-		League:          matchInfo.League,
-		Season:          matchInfo.Season,
-	})
+	matchData, err := aggregator.AggregateMatchData(ctx, c.buildMatchDataRequest(matchID, matchInfo))
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to aggregate match data: %v", err))
 		return
@@ -683,30 +660,7 @@ func (c *Config) generateDebate(w http.ResponseWriter, r *http.Request) {
 
 	// Use the data aggregator to get comprehensive match data
 	aggregator := NewDebateDataAggregator(c)
-	matchData, err := aggregator.AggregateMatchData(ctx, MatchDataRequest{
-		MatchID:         req.MatchID,
-		HomeTeam:        matchInfo.HomeTeam,
-		AwayTeam:        matchInfo.AwayTeam,
-		Date:            matchInfo.Date,
-		Status:          matchInfo.Status,
-		HomeScore:       matchInfo.HomeScore,
-		AwayScore:       matchInfo.AwayScore,
-		HomeGoals:       matchInfo.HomeGoals,
-		AwayGoals:       matchInfo.AwayGoals,
-		HomeShots:       matchInfo.HomeShots,
-		AwayShots:       matchInfo.AwayShots,
-		HomePossession:  matchInfo.HomePossession,
-		AwayPossession:  matchInfo.AwayPossession,
-		HomeFouls:       matchInfo.HomeFouls,
-		AwayFouls:       matchInfo.AwayFouls,
-		HomeYellowCards: matchInfo.HomeYellowCards,
-		AwayYellowCards: matchInfo.AwayYellowCards,
-		HomeRedCards:    matchInfo.HomeRedCards,
-		AwayRedCards:    matchInfo.AwayRedCards,
-		Venue:           matchInfo.Venue,
-		League:          matchInfo.League,
-		Season:          matchInfo.Season,
-	})
+	matchData, err := aggregator.AggregateMatchData(ctx, c.buildMatchDataRequest(req.MatchID, matchInfo))
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to aggregate match data: %v", err))
 		return
@@ -1352,4 +1306,54 @@ func (c *Config) restoreDebate(w http.ResponseWriter, r *http.Request) {
 
 	fmt.Printf("Restored debate ID: %d\n", debateID)
 	respondWithJSON(w, http.StatusOK, map[string]string{"message": "Debate restored successfully"})
+}
+
+// buildMatchDataRequest converts matchInfo to MatchDataRequest to eliminate code duplication
+func (c *Config) buildMatchDataRequest(matchID string, matchInfo *struct {
+	HomeTeam        string
+	AwayTeam        string
+	Date            string
+	Status          string
+	HomeScore       int
+	AwayScore       int
+	HomeGoals       int
+	AwayGoals       int
+	HomeShots       int
+	AwayShots       int
+	HomePossession  int
+	AwayPossession  int
+	HomeFouls       int
+	AwayFouls       int
+	HomeYellowCards int
+	AwayYellowCards int
+	HomeRedCards    int
+	AwayRedCards    int
+	Venue           string
+	League          string
+	Season          string
+}) MatchDataRequest {
+	return MatchDataRequest{
+		MatchID:         matchID,
+		HomeTeam:        matchInfo.HomeTeam,
+		AwayTeam:        matchInfo.AwayTeam,
+		Date:            matchInfo.Date,
+		Status:          matchInfo.Status,
+		HomeScore:       matchInfo.HomeScore,
+		AwayScore:       matchInfo.AwayScore,
+		HomeGoals:       matchInfo.HomeGoals,
+		AwayGoals:       matchInfo.AwayGoals,
+		HomeShots:       matchInfo.HomeShots,
+		AwayShots:       matchInfo.AwayShots,
+		HomePossession:  matchInfo.HomePossession,
+		AwayPossession:  matchInfo.AwayPossession,
+		HomeFouls:       matchInfo.HomeFouls,
+		AwayFouls:       matchInfo.AwayFouls,
+		HomeYellowCards: matchInfo.HomeYellowCards,
+		AwayYellowCards: matchInfo.AwayYellowCards,
+		HomeRedCards:    matchInfo.HomeRedCards,
+		AwayRedCards:    matchInfo.AwayRedCards,
+		Venue:           matchInfo.Venue,
+		League:          matchInfo.League,
+		Season:          matchInfo.Season,
+	}
 }
