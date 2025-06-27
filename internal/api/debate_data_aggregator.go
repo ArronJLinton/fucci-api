@@ -89,8 +89,8 @@ func (dda *DebateDataAggregator) AggregateMatchData(ctx context.Context, matchRe
 	}
 
 	// Fetch detailed match statistics if match is finished or in progress
-	if matchReq.Status == "FT" || matchReq.Status == "AET" || matchReq.Status == "PEN" ||
-		matchReq.Status == "1H" || matchReq.Status == "2H" || matchReq.Status == "HT" {
+	if matchReq.Status == StatusFullTime || matchReq.Status == StatusExtraTime || matchReq.Status == StatusPenaltyShootout ||
+		matchReq.Status == StatusFirstHalf || matchReq.Status == StatusSecondHalf || matchReq.Status == StatusHalfTime {
 		detailedStats, err := dda.fetchMatchStats(ctx, matchReq.MatchID)
 		if err != nil {
 			fmt.Printf("Failed to fetch detailed match stats: %v\n", err)
