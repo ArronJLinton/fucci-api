@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS debates (
     headline TEXT NOT NULL,
     description TEXT,
     ai_generated BOOLEAN DEFAULT true,
+    deleted_at TIMESTAMP NULL, -- Soft delete timestamp
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

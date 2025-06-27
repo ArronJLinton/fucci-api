@@ -4,26 +4,32 @@ VALUES ($1, $2, $3, $4, $5)
 RETURNING *;
 
 -- name: GetDebate :one
-SELECT * FROM debates WHERE id = $1;
+SELECT * FROM debates WHERE id = $1 AND deleted_at IS NULL;
 
 -- name: GetDebatesByMatch :many
 SELECT * FROM debates 
-WHERE match_id = $1 
+WHERE match_id = $1 AND deleted_at IS NULL
 ORDER BY created_at DESC;
 
 -- name: GetDebatesByType :many
 SELECT * FROM debates 
-WHERE debate_type = $1 
+WHERE debate_type = $1 AND deleted_at IS NULL
 ORDER BY created_at DESC;
 
 -- name: UpdateDebate :one
 UPDATE debates 
 SET headline = $2, description = $3, updated_at = CURRENT_TIMESTAMP
-WHERE id = $1
+WHERE id = $1 AND deleted_at IS NULL
 RETURNING *;
 
 -- name: DeleteDebate :exec
 DELETE FROM debates WHERE id = $1;
+
+-- name: SoftDeleteDebate :exec
+UPDATE debates SET deleted_at = CURRENT_TIMESTAMP WHERE id = $1;
+
+-- name: RestoreDebate :exec
+UPDATE debates SET deleted_at = NULL WHERE id = $1;
 
 -- name: CreateDebateCard :one
 INSERT INTO debate_cards (debate_id, stance, title, description, ai_generated)
@@ -135,5 +141,6 @@ SELECT
     da.engagement_score
 FROM debates d
 LEFT JOIN debate_analytics da ON d.id = da.debate_id
+WHERE d.deleted_at IS NULL
 ORDER BY da.engagement_score DESC NULLS LAST
 LIMIT $1; 

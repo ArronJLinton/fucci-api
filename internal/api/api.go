@@ -60,6 +60,9 @@ func New(c Config) http.Handler {
 	debateRouter.Post("/votes", c.createVote)
 	debateRouter.Post("/comments", c.createComment)
 	debateRouter.Get("/{debateId}/comments", c.getComments)
+	// Admin routes for soft delete management
+	debateRouter.Delete("/{id}/hard", c.hardDeleteDebate) // Permanent deletion
+	debateRouter.Post("/{id}/restore", c.restoreDebate)   // Restore soft-deleted debate
 
 	router.Mount("/users", userRouter)
 	router.Mount("/futbol", futbolRouter)

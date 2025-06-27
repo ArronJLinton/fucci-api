@@ -1157,3 +1157,60 @@ func (c *Config) checkDebateGenerationHealth(w http.ResponseWriter, r *http.Requ
 
 	respondWithJSON(w, statusCode, health)
 }
+
+// hardDeleteDebate handles permanent deletion of a debate (admin only)
+func (c *Config) hardDeleteDebate(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	// Extract debate ID from URL
+	debateIDStr := chi.URLParam(r, "id")
+	debateID, err := strconv.Atoi(debateIDStr)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid debate ID")
+		return
+	}
+
+	// TODO: Add admin authentication check here
+	// For now, we'll allow the operation but log it
+
+	// Hard delete the debate
+	err = c.DB.DeleteDebate(ctx, int32(debateID))
+	if err != nil {
+		if err == sql.ErrNoRows {
+			respondWithError(w, http.StatusNotFound, "Debate not found")
+			return
+		}
+		respondWithError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to delete debate: %v", err))
+		return
+	}
+
+	fmt.Printf("Hard deleted debate ID: %d\n", debateID)
+	respondWithJSON(w, http.StatusOK, map[string]string{"message": "Debate permanently deleted"})
+}
+
+// restoreDebate handles restoring a soft-deleted debate
+func (c *Config) restoreDebate(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	// Extract debate ID from URL
+	debateIDStr := chi.URLParam(r, "id")
+	debateID, err := strconv.Atoi(debateIDStr)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid debate ID")
+		return
+	}
+
+	// Restore the debate
+	err = c.DB.RestoreDebate(ctx, int32(debateID))
+	if err != nil {
+		if err == sql.ErrNoRows {
+			respondWithError(w, http.StatusNotFound, "Debate not found")
+			return
+		}
+		respondWithError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to restore debate: %v", err))
+		return
+	}
+
+	fmt.Printf("Restored debate ID: %d\n", debateID)
+	respondWithJSON(w, http.StatusOK, map[string]string{"message": "Debate restored successfully"})
+}
