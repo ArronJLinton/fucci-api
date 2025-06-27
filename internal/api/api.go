@@ -52,6 +52,8 @@ func New(c Config) http.Handler {
 	debateRouter.Post("/", c.createDebate)
 	debateRouter.Get("/top", c.getTopDebates)
 	debateRouter.Get("/generate", c.generateAIPrompt)
+	debateRouter.Post("/generate", c.generateDebate)
+	debateRouter.Get("/health", c.checkDebateGenerationHealth)
 	debateRouter.Get("/match", c.getDebatesByMatch)
 	debateRouter.Get("/{id}", c.getDebate)
 	debateRouter.Post("/cards", c.createDebateCard)
