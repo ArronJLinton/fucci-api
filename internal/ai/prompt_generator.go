@@ -31,6 +31,9 @@ type MatchData struct {
 	Stats           *MatchStats      `json:"stats,omitempty"`
 	NewsHeadlines   []string         `json:"news_headlines,omitempty"`
 	SocialSentiment *SocialSentiment `json:"social_sentiment,omitempty"`
+	Venue           string           `json:"venue,omitempty"`
+	League          string           `json:"league,omitempty"`
+	Season          string           `json:"season,omitempty"`
 }
 
 type LineupData struct {
@@ -275,7 +278,19 @@ func (pg *PromptGenerator) buildUserPrompt(matchData MatchData, promptType strin
 	prompt.WriteString(fmt.Sprintf("Generate a %s debate prompt for this match:\n\n", promptType))
 	prompt.WriteString(fmt.Sprintf("Match: %s vs %s\n", matchData.HomeTeam, matchData.AwayTeam))
 	prompt.WriteString(fmt.Sprintf("Date: %s\n", matchData.Date))
-	prompt.WriteString(fmt.Sprintf("Status: %s\n\n", matchData.Status))
+	prompt.WriteString(fmt.Sprintf("Status: %s\n", matchData.Status))
+
+	// Add venue, league, and season information if available
+	if matchData.Venue != "" {
+		prompt.WriteString(fmt.Sprintf("Venue: %s\n", matchData.Venue))
+	}
+	if matchData.League != "" {
+		prompt.WriteString(fmt.Sprintf("League: %s\n", matchData.League))
+	}
+	if matchData.Season != "" {
+		prompt.WriteString(fmt.Sprintf("Season: %s\n", matchData.Season))
+	}
+	prompt.WriteString("\n")
 
 	if matchData.Lineups != nil {
 		prompt.WriteString("LINEUPS:\n")
@@ -300,11 +315,12 @@ func (pg *PromptGenerator) buildUserPrompt(matchData MatchData, promptType strin
 
 	if matchData.Stats != nil {
 		prompt.WriteString("MATCH STATS:\n")
-		prompt.WriteString(fmt.Sprintf("Score: %d-%d\n", matchData.Stats.HomeGoals, matchData.Stats.AwayGoals))
+		// Enhanced score information
+		prompt.WriteString(fmt.Sprintf("Final Score: %d-%d\n", matchData.Stats.HomeGoals, matchData.Stats.AwayGoals))
 		prompt.WriteString(fmt.Sprintf("Shots: %d-%d\n", matchData.Stats.HomeShots, matchData.Stats.AwayShots))
 		prompt.WriteString(fmt.Sprintf("Possession: %d%%-%d%%\n", matchData.Stats.HomePossession, matchData.Stats.AwayPossession))
 		prompt.WriteString(fmt.Sprintf("Fouls: %d-%d\n", matchData.Stats.HomeFouls, matchData.Stats.AwayFouls))
-		prompt.WriteString(fmt.Sprintf("Cards: Y(%d-%d) R(%d-%d)\n\n",
+		prompt.WriteString(fmt.Sprintf("Cards: Yellow(%d-%d) Red(%d-%d)\n\n",
 			matchData.Stats.HomeYellowCards, matchData.Stats.AwayYellowCards,
 			matchData.Stats.HomeRedCards, matchData.Stats.AwayRedCards))
 	}
