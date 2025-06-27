@@ -1308,8 +1308,8 @@ func (c *Config) restoreDebate(w http.ResponseWriter, r *http.Request) {
 	respondWithJSON(w, http.StatusOK, map[string]string{"message": "Debate restored successfully"})
 }
 
-// buildMatchDataRequest converts matchInfo to MatchDataRequest to eliminate code duplication
-func (c *Config) buildMatchDataRequest(matchID string, matchInfo *struct {
+// MatchInfo represents detailed information about a match
+type MatchInfo struct {
 	HomeTeam        string
 	AwayTeam        string
 	Date            string
