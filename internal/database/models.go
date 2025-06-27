@@ -26,6 +26,7 @@ type Debate struct {
 	Headline    string
 	Description sql.NullString
 	AiGenerated sql.NullBool
+	DeletedAt   sql.NullTime
 	CreatedAt   sql.NullTime
 	UpdatedAt   sql.NullTime
 }

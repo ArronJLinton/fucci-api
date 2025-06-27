@@ -48,7 +48,7 @@ func (q *Queries) CreateComment(ctx context.Context, arg CreateCommentParams) (C
 const createDebate = `-- name: CreateDebate :one
 INSERT INTO debates (match_id, debate_type, headline, description, ai_generated)
 VALUES ($1, $2, $3, $4, $5)
-RETURNING id, match_id, debate_type, headline, description, ai_generated, created_at, updated_at
+RETURNING id, match_id, debate_type, headline, description, ai_generated, deleted_at, created_at, updated_at
 `
 
 type CreateDebateParams struct {
@@ -75,6 +75,7 @@ func (q *Queries) CreateDebate(ctx context.Context, arg CreateDebateParams) (Deb
 		&i.Headline,
 		&i.Description,
 		&i.AiGenerated,
+		&i.DeletedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -339,7 +340,7 @@ func (q *Queries) GetComments(ctx context.Context, debateID sql.NullInt32) ([]Ge
 }
 
 const getDebate = `-- name: GetDebate :one
-SELECT id, match_id, debate_type, headline, description, ai_generated, created_at, updated_at FROM debates WHERE id = $1
+SELECT id, match_id, debate_type, headline, description, ai_generated, deleted_at, created_at, updated_at FROM debates WHERE id = $1 AND deleted_at IS NULL
 `
 
 func (q *Queries) GetDebate(ctx context.Context, id int32) (Debate, error) {
@@ -352,6 +353,7 @@ func (q *Queries) GetDebate(ctx context.Context, id int32) (Debate, error) {
 		&i.Headline,
 		&i.Description,
 		&i.AiGenerated,
+		&i.DeletedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -434,8 +436,8 @@ func (q *Queries) GetDebateCards(ctx context.Context, debateID sql.NullInt32) ([
 }
 
 const getDebatesByMatch = `-- name: GetDebatesByMatch :many
-SELECT id, match_id, debate_type, headline, description, ai_generated, created_at, updated_at FROM debates 
-WHERE match_id = $1 
+SELECT id, match_id, debate_type, headline, description, ai_generated, deleted_at, created_at, updated_at FROM debates 
+WHERE match_id = $1 AND deleted_at IS NULL
 ORDER BY created_at DESC
 `
 
@@ -455,6 +457,7 @@ func (q *Queries) GetDebatesByMatch(ctx context.Context, matchID string) ([]Deba
 			&i.Headline,
 			&i.Description,
 			&i.AiGenerated,
+			&i.DeletedAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -472,8 +475,8 @@ func (q *Queries) GetDebatesByMatch(ctx context.Context, matchID string) ([]Deba
 }
 
 const getDebatesByType = `-- name: GetDebatesByType :many
-SELECT id, match_id, debate_type, headline, description, ai_generated, created_at, updated_at FROM debates 
-WHERE debate_type = $1 
+SELECT id, match_id, debate_type, headline, description, ai_generated, deleted_at, created_at, updated_at FROM debates 
+WHERE debate_type = $1 AND deleted_at IS NULL
 ORDER BY created_at DESC
 `
 
@@ -493,6 +496,7 @@ func (q *Queries) GetDebatesByType(ctx context.Context, debateType string) ([]De
 			&i.Headline,
 			&i.Description,
 			&i.AiGenerated,
+			&i.DeletedAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -511,12 +515,13 @@ func (q *Queries) GetDebatesByType(ctx context.Context, debateType string) ([]De
 
 const getTopDebates = `-- name: GetTopDebates :many
 SELECT 
-    d.id, d.match_id, d.debate_type, d.headline, d.description, d.ai_generated, d.created_at, d.updated_at,
+    d.id, d.match_id, d.debate_type, d.headline, d.description, d.ai_generated, d.deleted_at, d.created_at, d.updated_at,
     da.total_votes,
     da.total_comments,
     da.engagement_score
 FROM debates d
 LEFT JOIN debate_analytics da ON d.id = da.debate_id
+WHERE d.deleted_at IS NULL
 ORDER BY da.engagement_score DESC NULLS LAST
 LIMIT $1
 `
@@ -528,6 +533,7 @@ type GetTopDebatesRow struct {
 	Headline        string
 	Description     sql.NullString
 	AiGenerated     sql.NullBool
+	DeletedAt       sql.NullTime
 	CreatedAt       sql.NullTime
 	UpdatedAt       sql.NullTime
 	TotalVotes      sql.NullInt32
@@ -551,6 +557,7 @@ func (q *Queries) GetTopDebates(ctx context.Context, limit int32) ([]GetTopDebat
 			&i.Headline,
 			&i.Description,
 			&i.AiGenerated,
+			&i.DeletedAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.TotalVotes,
@@ -674,6 +681,24 @@ func (q *Queries) GetVotesByCard(ctx context.Context, debateCardID sql.NullInt32
 	return items, nil
 }
 
+const restoreDebate = `-- name: RestoreDebate :exec
+UPDATE debates SET deleted_at = NULL WHERE id = $1
+`
+
+func (q *Queries) RestoreDebate(ctx context.Context, id int32) error {
+	_, err := q.db.ExecContext(ctx, restoreDebate, id)
+	return err
+}
+
+const softDeleteDebate = `-- name: SoftDeleteDebate :exec
+UPDATE debates SET deleted_at = CURRENT_TIMESTAMP WHERE id = $1
+`
+
+func (q *Queries) SoftDeleteDebate(ctx context.Context, id int32) error {
+	_, err := q.db.ExecContext(ctx, softDeleteDebate, id)
+	return err
+}
+
 const updateComment = `-- name: UpdateComment :one
 UPDATE comments 
 SET content = $2, updated_at = CURRENT_TIMESTAMP
@@ -704,8 +729,8 @@ func (q *Queries) UpdateComment(ctx context.Context, arg UpdateCommentParams) (C
 const updateDebate = `-- name: UpdateDebate :one
 UPDATE debates 
 SET headline = $2, description = $3, updated_at = CURRENT_TIMESTAMP
-WHERE id = $1
-RETURNING id, match_id, debate_type, headline, description, ai_generated, created_at, updated_at
+WHERE id = $1 AND deleted_at IS NULL
+RETURNING id, match_id, debate_type, headline, description, ai_generated, deleted_at, created_at, updated_at
 `
 
 type UpdateDebateParams struct {
@@ -724,6 +749,7 @@ func (q *Queries) UpdateDebate(ctx context.Context, arg UpdateDebateParams) (Deb
 		&i.Headline,
 		&i.Description,
 		&i.AiGenerated,
+		&i.DeletedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
