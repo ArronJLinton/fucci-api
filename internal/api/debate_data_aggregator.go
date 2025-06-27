@@ -93,7 +93,7 @@ func (dda *DebateDataAggregator) AggregateMatchData(ctx context.Context, matchRe
 		matchReq.Status == StatusFirstHalf || matchReq.Status == StatusSecondHalf || matchReq.Status == StatusHalfTime {
 		detailedStats, err := dda.fetchMatchStats(ctx, matchReq.MatchID)
 		if err != nil {
-			fmt.Printf("Failed to fetch detailed match stats: %v\n", err)
+			log.Printf("Failed to fetch detailed match stats: %v\n", err)
 		} else {
 			// Merge detailed stats with basic stats
 			enhancedStats.HomeShots = detailedStats.HomeShots
