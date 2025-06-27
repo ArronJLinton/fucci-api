@@ -639,8 +639,12 @@ func (c *Config) generateDebate(w http.ResponseWriter, r *http.Request) {
 					c.getDebateByID(w, r, existing.ID)
 					return
 				} else {
-					// Delete existing debate to regenerate
-					// Note: You might want to add a soft delete instead
+					// Soft delete existing debate to regenerate
+					err := c.DB.SoftDeleteDebate(ctx, existing.ID)
+					if err != nil {
+						respondWithError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to soft delete existing debate: %v", err))
+						return
+					}
 					fmt.Printf("Regenerating debate for match %s, type %s\n", req.MatchID, req.DebateType)
 				}
 			}
