@@ -62,6 +62,8 @@ func (dda *DebateDataAggregator) AggregateMatchData(ctx context.Context, matchRe
 
 	// Create enhanced stats with the data we already have
 	enhancedStats := &ai.MatchStats{
+		HomeScore:       matchReq.HomeScore,
+		AwayScore:       matchReq.AwayScore,
 		HomeGoals:       matchReq.HomeGoals,
 		AwayGoals:       matchReq.AwayGoals,
 		HomeShots:       matchReq.HomeShots,

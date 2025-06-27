@@ -52,6 +52,8 @@ type Player struct {
 }
 
 type MatchStats struct {
+	HomeScore       int `json:"home_score"`
+	AwayScore       int `json:"away_score"`
 	HomeGoals       int `json:"home_goals"`
 	AwayGoals       int `json:"away_goals"`
 	HomeShots       int `json:"home_shots"`
@@ -316,7 +318,7 @@ func (pg *PromptGenerator) buildUserPrompt(matchData MatchData, promptType strin
 	if matchData.Stats != nil {
 		prompt.WriteString("MATCH STATS:\n")
 		// Enhanced score information
-		prompt.WriteString(fmt.Sprintf("Final Score: %d-%d\n", matchData.Stats.HomeGoals, matchData.Stats.AwayGoals))
+		prompt.WriteString(fmt.Sprintf("Final Score: %d-%d\n", matchData.Stats.HomeScore, matchData.Stats.AwayScore))
 		prompt.WriteString(fmt.Sprintf("Shots: %d-%d\n", matchData.Stats.HomeShots, matchData.Stats.AwayShots))
 		prompt.WriteString(fmt.Sprintf("Possession: %d%%-%d%%\n", matchData.Stats.HomePossession, matchData.Stats.AwayPossession))
 		prompt.WriteString(fmt.Sprintf("Fouls: %d-%d\n", matchData.Stats.HomeFouls, matchData.Stats.AwayFouls))
