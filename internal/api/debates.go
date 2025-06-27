@@ -24,6 +24,12 @@ type CreateDebateRequest struct {
 	AIGenerated bool   `json:"ai_generated"`
 }
 
+type GenerateDebateRequest struct {
+	MatchID         string `json:"match_id"`
+	DebateType      string `json:"debate_type"`                // "pre_match" or "post_match"
+	ForceRegenerate bool   `json:"force_regenerate,omitempty"` // Force regeneration even if cached
+}
+
 type CreateDebateCardRequest struct {
 	DebateID    int32  `json:"debate_id"`
 	Stance      string `json:"stance"` // "agree", "disagree", "wildcard"
@@ -512,6 +518,12 @@ func (c *Config) generateAIPrompt(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Validate match status for debate type
+	if err := c.validateMatchStatusForDebateType(matchInfo.Status, promptType); err != nil {
+		respondWithJSON(w, http.StatusOK, map[string]string{"info": err.Error()})
+		return
+	}
+
 	// Use the data aggregator to get comprehensive match data
 	aggregator := NewDebateDataAggregator(c)
 	matchData, err := aggregator.AggregateMatchData(ctx, MatchDataRequest{
@@ -539,6 +551,368 @@ func (c *Config) generateAIPrompt(w http.ResponseWriter, r *http.Request) {
 	}
 
 	respondWithJSON(w, http.StatusOK, prompt)
+}
+
+// validateMatchStatusForDebateType checks if the match status is appropriate for the requested debate type
+func (c *Config) validateMatchStatusForDebateType(matchStatus, debateType string) error {
+	// Define match status categories
+	notStartedStatuses := []string{"NS", "TBD", "POSTPONED", "CANCELLED", "SUSPENDED"}
+	inProgressStatuses := []string{"1H", "2H", "HT", "ET", "P", "BT"}
+	finishedStatuses := []string{"FT", "AET", "PEN", "FT_PEN", "AET_PEN"}
+
+	// Check if status is in not started category
+	for _, status := range notStartedStatuses {
+		if matchStatus == status {
+			if debateType == "post_match" {
+				return fmt.Errorf("cannot generate post_match debate for a match that hasn't started (status: %s)", matchStatus)
+			}
+			return nil // pre_match is allowed for not started matches
+		}
+	}
+
+	// Check if status is in progress
+	for _, status := range inProgressStatuses {
+		if matchStatus == status {
+			if debateType == "post_match" {
+				return fmt.Errorf("cannot generate post_match debate for a match that is still in progress (status: %s)", matchStatus)
+			}
+			return nil // pre_match is allowed for in-progress matches
+		}
+	}
+
+	// Check if status is finished
+	for _, status := range finishedStatuses {
+		if matchStatus == status {
+			if debateType == "pre_match" {
+				return fmt.Errorf("cannot generate pre_match debate for a finished match (status: %s)", matchStatus)
+			}
+			return nil // post_match is allowed for finished matches
+		}
+	}
+
+	// If status doesn't match any known category, be conservative
+	if debateType == "post_match" {
+		return fmt.Errorf("cannot generate post_match debate for match with unknown status: %s", matchStatus)
+	}
+
+	return nil
+}
+
+func (c *Config) generateDebate(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	if c.AIPromptGenerator == nil {
+		respondWithError(w, http.StatusNotImplemented, "AI prompt generation is not configured. Please set the OpenAI API key.")
+		return
+	}
+
+	var req GenerateDebateRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	// Validate required fields
+	if req.MatchID == "" || req.DebateType == "" {
+		respondWithError(w, http.StatusBadRequest, "match_id and debate_type are required")
+		return
+	}
+
+	if req.DebateType != "pre_match" && req.DebateType != "post_match" {
+		respondWithError(w, http.StatusBadRequest, "debate_type must be 'pre_match' or 'post_match'")
+		return
+	}
+
+	// Validate match_id format (should be numeric)
+	if _, err := strconv.ParseInt(req.MatchID, 10, 64); err != nil {
+		respondWithError(w, http.StatusBadRequest, "match_id must be a valid numeric ID")
+		return
+	}
+
+	// Check if debate already exists for this match and type
+	existingDebates, err := c.DB.GetDebatesByMatch(ctx, req.MatchID)
+	if err == nil {
+		for _, existing := range existingDebates {
+			if existing.DebateType == req.DebateType {
+				if !req.ForceRegenerate {
+					// Return existing debate
+					c.getDebateByID(w, r, existing.ID)
+					return
+				} else {
+					// Delete existing debate to regenerate
+					// Note: You might want to add a soft delete instead
+					fmt.Printf("Regenerating debate for match %s, type %s\n", req.MatchID, req.DebateType)
+				}
+			}
+		}
+	}
+
+	// Get basic match information
+	matchInfo, err := c.getMatchInfo(ctx, req.MatchID)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to get match info: %v", err))
+		return
+	}
+
+	// Validate match status for debate type
+	if err := c.validateMatchStatusForDebateType(matchInfo.Status, req.DebateType); err != nil {
+		respondWithJSON(w, http.StatusOK, map[string]string{"info": err.Error()})
+		return
+	}
+
+	// Use the data aggregator to get comprehensive match data
+	aggregator := NewDebateDataAggregator(c)
+	matchData, err := aggregator.AggregateMatchData(ctx, MatchDataRequest{
+		MatchID:  req.MatchID,
+		HomeTeam: matchInfo.HomeTeam,
+		AwayTeam: matchInfo.AwayTeam,
+		Date:     matchInfo.Date,
+		Status:   matchInfo.Status,
+	})
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to aggregate match data: %v", err))
+		return
+	}
+
+	// Generate AI prompt
+	var prompt *ai.DebatePrompt
+	if req.DebateType == "pre_match" {
+		prompt, err = c.AIPromptGenerator.GeneratePreMatchPrompt(ctx, *matchData)
+	} else {
+		prompt, err = c.AIPromptGenerator.GeneratePostMatchPrompt(ctx, *matchData)
+	}
+
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to generate AI prompt: %v", err))
+		return
+	}
+
+	// Validate prompt structure
+	if prompt.Headline == "" || len(prompt.Cards) == 0 {
+		respondWithError(w, http.StatusInternalServerError, "Generated prompt is invalid (missing headline or cards)")
+		return
+	}
+
+	// Create the debate in the database
+	debate, err := c.DB.CreateDebate(ctx, database.CreateDebateParams{
+		MatchID:     req.MatchID,
+		DebateType:  req.DebateType,
+		Headline:    prompt.Headline,
+		Description: sql.NullString{String: prompt.Description, Valid: prompt.Description != ""},
+		AiGenerated: sql.NullBool{Bool: true, Valid: true},
+	})
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to create debate: %v", err))
+		return
+	}
+
+	// Create analytics record
+	_, err = c.DB.CreateDebateAnalytics(ctx, database.CreateDebateAnalyticsParams{
+		DebateID:        sql.NullInt32{Int32: debate.ID, Valid: true},
+		TotalVotes:      sql.NullInt32{Int32: 0, Valid: true},
+		TotalComments:   sql.NullInt32{Int32: 0, Valid: true},
+		EngagementScore: sql.NullString{String: "0.0", Valid: true},
+	})
+	if err != nil {
+		fmt.Printf("Failed to create debate analytics: %v\n", err)
+	}
+
+	// Create debate cards
+	var cardResponses []DebateCardResponse
+	for _, card := range prompt.Cards {
+		// Validate card data
+		if card.Stance == "" || card.Title == "" {
+			fmt.Printf("Skipping invalid card: stance=%s, title=%s\n", card.Stance, card.Title)
+			continue
+		}
+
+		// Validate stance
+		if card.Stance != "agree" && card.Stance != "disagree" && card.Stance != "wildcard" {
+			fmt.Printf("Skipping card with invalid stance: %s\n", card.Stance)
+			continue
+		}
+
+		// Create the card in the database
+		dbCard, err := c.DB.CreateDebateCard(ctx, database.CreateDebateCardParams{
+			DebateID:    sql.NullInt32{Int32: debate.ID, Valid: true},
+			Stance:      card.Stance,
+			Title:       card.Title,
+			Description: sql.NullString{String: card.Description, Valid: card.Description != ""},
+			AiGenerated: sql.NullBool{Bool: true, Valid: true},
+		})
+		if err != nil {
+			respondWithError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to create debate card: %v", err))
+			return
+		}
+
+		// Add to response
+		cardResponse := DebateCardResponse{
+			ID:          dbCard.ID,
+			DebateID:    dbCard.DebateID.Int32,
+			Stance:      dbCard.Stance,
+			Title:       dbCard.Title,
+			Description: dbCard.Description.String,
+			AIGenerated: dbCard.AiGenerated.Bool,
+			CreatedAt:   dbCard.CreatedAt.Time,
+			UpdatedAt:   dbCard.UpdatedAt.Time,
+			VoteCounts: VoteCounts{
+				Upvotes:   0,
+				Downvotes: 0,
+				Emojis:    make(map[string]int),
+			},
+		}
+		cardResponses = append(cardResponses, cardResponse)
+	}
+
+	// Ensure we have at least one card
+	if len(cardResponses) == 0 {
+		respondWithError(w, http.StatusInternalServerError, "No valid debate cards were created")
+		return
+	}
+
+	// Build the complete response
+	response := DebateResponse{
+		ID:          debate.ID,
+		MatchID:     debate.MatchID,
+		DebateType:  debate.DebateType,
+		Headline:    debate.Headline,
+		Description: debate.Description.String,
+		AIGenerated: debate.AiGenerated.Bool,
+		CreatedAt:   debate.CreatedAt.Time,
+		UpdatedAt:   debate.UpdatedAt.Time,
+		Cards:       cardResponses,
+		Analytics: &DebateAnalyticsResponse{
+			ID:              debate.ID,
+			DebateID:        debate.ID,
+			TotalVotes:      0,
+			TotalComments:   0,
+			EngagementScore: 0.0,
+			CreatedAt:       debate.CreatedAt.Time,
+			UpdatedAt:       debate.UpdatedAt.Time,
+		},
+	}
+
+	respondWithJSON(w, http.StatusCreated, map[string]interface{}{
+		"message": "Debate generated successfully",
+		"debate":  response,
+	})
+}
+
+// Helper function to get debate by ID (extracted from getDebate for reuse)
+func (c *Config) getDebateByID(w http.ResponseWriter, r *http.Request, debateID int32) {
+	ctx := r.Context()
+
+	// Get debate
+	debate, err := c.DB.GetDebate(ctx, debateID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			respondWithError(w, http.StatusNotFound, "Debate not found")
+			return
+		}
+		respondWithError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to get debate: %v", err))
+		return
+	}
+
+	// Get debate cards
+	cards, err := c.DB.GetDebateCards(ctx, sql.NullInt32{Int32: debate.ID, Valid: true})
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to get debate cards: %v", err))
+		return
+	}
+
+	// Get analytics
+	analytics, err := c.DB.GetDebateAnalytics(ctx, sql.NullInt32{Int32: debate.ID, Valid: true})
+	if err != nil && err != sql.ErrNoRows {
+		respondWithError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to get debate analytics: %v", err))
+		return
+	}
+
+	// Build response
+	response := DebateResponse{
+		ID:          debate.ID,
+		MatchID:     debate.MatchID,
+		DebateType:  debate.DebateType,
+		Headline:    debate.Headline,
+		Description: debate.Description.String,
+		AIGenerated: debate.AiGenerated.Bool,
+		CreatedAt:   debate.CreatedAt.Time,
+		UpdatedAt:   debate.UpdatedAt.Time,
+	}
+
+	// Add cards with vote counts
+	cardIDs := make([]int32, len(cards))
+	for i, card := range cards {
+		cardIDs[i] = card.ID
+	}
+
+	if len(cardIDs) > 0 {
+		voteCounts, err := c.DB.GetVoteCounts(ctx, cardIDs)
+		if err != nil {
+			respondWithError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to get vote counts: %v", err))
+			return
+		}
+
+		// Build vote counts map
+		voteCountsMap := make(map[int32]VoteCounts)
+		for _, vc := range voteCounts {
+			if vc.DebateCardID.Valid {
+				counts := voteCountsMap[vc.DebateCardID.Int32]
+				switch vc.VoteType {
+				case "upvote":
+					counts.Upvotes = int(vc.Count)
+				case "downvote":
+					counts.Downvotes = int(vc.Count)
+				case "emoji":
+					if counts.Emojis == nil {
+						counts.Emojis = make(map[string]int)
+					}
+					if vc.Emoji.Valid {
+						counts.Emojis[vc.Emoji.String] = int(vc.Count)
+					}
+				}
+				voteCountsMap[vc.DebateCardID.Int32] = counts
+			}
+		}
+
+		// Build card responses
+		for _, card := range cards {
+			cardResponse := DebateCardResponse{
+				ID:          card.ID,
+				DebateID:    card.DebateID.Int32,
+				Stance:      card.Stance,
+				Title:       card.Title,
+				Description: card.Description.String,
+				AIGenerated: card.AiGenerated.Bool,
+				CreatedAt:   card.CreatedAt.Time,
+				UpdatedAt:   card.UpdatedAt.Time,
+				VoteCounts:  voteCountsMap[card.ID],
+			}
+			response.Cards = append(response.Cards, cardResponse)
+		}
+	}
+
+	// Add analytics if available
+	if err == nil {
+		engagementScore := 0.0
+		if analytics.EngagementScore.Valid {
+			// Parse engagement score from string
+			if score, err := strconv.ParseFloat(analytics.EngagementScore.String, 64); err == nil {
+				engagementScore = score
+			}
+		}
+
+		response.Analytics = &DebateAnalyticsResponse{
+			ID:              analytics.ID,
+			DebateID:        analytics.DebateID.Int32,
+			TotalVotes:      int(analytics.TotalVotes.Int32),
+			TotalComments:   int(analytics.TotalComments.Int32),
+			EngagementScore: engagementScore,
+			CreatedAt:       analytics.CreatedAt.Time,
+			UpdatedAt:       analytics.UpdatedAt.Time,
+		}
+	}
+
+	respondWithJSON(w, http.StatusOK, response)
 }
 
 // getMatchInfo gets basic match information
@@ -726,4 +1100,56 @@ func (c *Config) updateDebateAnalytics(ctx context.Context, debateCardID int32) 
 	if err != nil {
 		fmt.Printf("Failed to update debate analytics: %v\n", err)
 	}
+}
+
+// checkDebateGenerationHealth checks if all components needed for debate generation are working
+func (c *Config) checkDebateGenerationHealth(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	health := map[string]interface{}{
+		"status": "healthy",
+		"components": map[string]interface{}{
+			"ai_prompt_generator": c.AIPromptGenerator != nil,
+			"database":            c.DB != nil,
+			"football_api":        c.FootballAPIKey != "",
+			"cache":               c.Cache != nil,
+		},
+		"timestamp": time.Now().UTC(),
+	}
+
+	// Test database connection
+	if c.DB != nil {
+		_, err := c.DB.GetTopDebates(ctx, 1)
+		if err != nil {
+			health["status"] = "unhealthy"
+			health["database_error"] = err.Error()
+		}
+	}
+
+	// Test cache connection
+	if c.Cache != nil {
+		err := c.Cache.Set(ctx, "health_check", "test", time.Minute)
+		if err != nil {
+			health["status"] = "unhealthy"
+			health["cache_error"] = err.Error()
+		}
+	}
+
+	// Test football API
+	if c.FootballAPIKey != "" {
+		// Try to get a simple fixture to test API
+		testMatchID := "1321727" // Use a known match ID
+		_, err := c.getMatchInfo(ctx, testMatchID)
+		if err != nil {
+			health["status"] = "unhealthy"
+			health["football_api_error"] = err.Error()
+		}
+	}
+
+	statusCode := http.StatusOK
+	if health["status"] == "unhealthy" {
+		statusCode = http.StatusServiceUnavailable
+	}
+
+	respondWithJSON(w, statusCode, health)
 }
