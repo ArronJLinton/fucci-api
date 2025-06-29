@@ -908,29 +908,7 @@ func (c *Config) getDebateByID(w http.ResponseWriter, r *http.Request, debateID 
 }
 
 // getMatchInfo gets basic match information
-func (c *Config) getMatchInfo(ctx context.Context, matchID string) (*struct {
-	HomeTeam        string
-	AwayTeam        string
-	Date            string
-	Status          string
-	HomeScore       int
-	AwayScore       int
-	HomeGoals       int
-	AwayGoals       int
-	HomeShots       int
-	AwayShots       int
-	HomePossession  int
-	AwayPossession  int
-	HomeFouls       int
-	AwayFouls       int
-	HomeYellowCards int
-	AwayYellowCards int
-	HomeRedCards    int
-	AwayRedCards    int
-	Venue           string
-	League          string
-	Season          string
-}, error) {
+func (c *Config) getMatchInfo(ctx context.Context, matchID string) (*MatchInfo, error) {
 	// Use configurable base URL with fallback
 	baseURL := c.APIFootballBaseURL
 	if baseURL == "" {
@@ -1037,29 +1015,7 @@ func (c *Config) getMatchInfo(ctx context.Context, matchID string) (*struct {
 		awayScore = *match.Score.Penalty.Away
 	}
 
-	return &struct {
-		HomeTeam        string
-		AwayTeam        string
-		Date            string
-		Status          string
-		HomeScore       int
-		AwayScore       int
-		HomeGoals       int
-		AwayGoals       int
-		HomeShots       int
-		AwayShots       int
-		HomePossession  int
-		AwayPossession  int
-		HomeFouls       int
-		AwayFouls       int
-		HomeYellowCards int
-		AwayYellowCards int
-		HomeRedCards    int
-		AwayRedCards    int
-		Venue           string
-		League          string
-		Season          string
-	}{
+	return &MatchInfo{
 		HomeTeam:        match.Teams.Home.Name,
 		AwayTeam:        match.Teams.Away.Name,
 		Date:            match.Fixture.Date,
@@ -1331,7 +1287,10 @@ type MatchInfo struct {
 	Venue           string
 	League          string
 	Season          string
-}) MatchDataRequest {
+}
+
+// buildMatchDataRequest converts MatchInfo to MatchDataRequest
+func (c *Config) buildMatchDataRequest(matchID string, matchInfo *MatchInfo) MatchDataRequest {
 	return MatchDataRequest{
 		MatchID:         matchID,
 		HomeTeam:        matchInfo.HomeTeam,
