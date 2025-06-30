@@ -991,30 +991,69 @@ func (c *Config) getMatchInfo(ctx context.Context, matchID string) (*MatchInfo, 
 
 	match := matchResponse.Response[0]
 
-	// Determine final score based on match status
-	var homeScore, awayScore int
-	if match.Fixture.Status.Short == "FT" || match.Fixture.Status.Short == "AET" || match.Fixture.Status.Short == "PEN" {
-		homeScore = match.Score.Fulltime.Home
-		awayScore = match.Score.Fulltime.Away
-	} else if match.Fixture.Status.Short == "HT" {
-		homeScore = match.Score.Halftime.Home
-		awayScore = match.Score.Halftime.Away
-	} else {
-		// For ongoing matches, use current goals
-		homeScore = match.Goals.Home
-		awayScore = match.Goals.Away
+	// Define constants for match statuses
+	const (
+		StatusFullTime  = "FT"
+		StatusExtraTime = "AET"
+		StatusPenalty   = "PEN"
+		StatusHalfTime  = "HT"
+	)
+
+	// Helper function to determine the score based on match status
+	getScores := func(match struct {
+		Fixture struct {
+			Status struct {
+				Short string `json:"short"`
+			} `json:"status"`
+		} `json:"fixture"`
+		Goals struct {
+			Home int `json:"home"`
+			Away int `json:"away"`
+		} `json:"goals"`
+		Score struct {
+			Halftime struct {
+				Home int `json:"home"`
+				Away int `json:"away"`
+			} `json:"halftime"`
+			Fulltime struct {
+				Home int `json:"home"`
+				Away int `json:"away"`
+			} `json:"fulltime"`
+			Extratime struct {
+				Home *int `json:"home"`
+				Away *int `json:"away"`
+			} `json:"extratime"`
+			Penalty struct {
+				Home *int `json:"home"`
+				Away *int `json:"away"`
+			} `json:"penalty"`
+		} `json:"score"`
+	}) (int, int) {
+		var homeScore, awayScore int
+		switch match.Fixture.Status.Short {
+		case StatusFullTime, StatusExtraTime, StatusPenalty:
+			homeScore = match.Score.Fulltime.Home
+			awayScore = match.Score.Fulltime.Away
+		case StatusHalfTime:
+			homeScore = match.Score.Halftime.Home
+			awayScore = match.Score.Halftime.Away
+		default:
+			homeScore = match.Goals.Home
+			awayScore = match.Goals.Away
+		}
+		if match.Score.Extratime.Home != nil && match.Score.Extratime.Away != nil {
+			homeScore = *match.Score.Extratime.Home
+			awayScore = *match.Score.Extratime.Away
+		}
+		if match.Score.Penalty.Home != nil && match.Score.Penalty.Away != nil {
+			homeScore = *match.Score.Penalty.Home
+			awayScore = *match.Score.Penalty.Away
+		}
+		return homeScore, awayScore
 	}
 
-	// Handle extra time and penalties
-	if match.Score.Extratime.Home != nil && match.Score.Extratime.Away != nil {
-		homeScore = *match.Score.Extratime.Home
-		awayScore = *match.Score.Extratime.Away
-	}
-	if match.Score.Penalty.Home != nil && match.Score.Penalty.Away != nil {
-		homeScore = *match.Score.Penalty.Home
-		awayScore = *match.Score.Penalty.Away
-	}
-
+	// Determine final score
+	homeScore, awayScore := getScores(match)
 	return &MatchInfo{
 		HomeTeam:        match.Teams.Home.Name,
 		AwayTeam:        match.Teams.Away.Name,
