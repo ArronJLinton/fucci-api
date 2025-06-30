@@ -526,13 +526,7 @@ func (c *Config) generateAIPrompt(w http.ResponseWriter, r *http.Request) {
 
 	// Use the data aggregator to get comprehensive match data
 	aggregator := NewDebateDataAggregator(c)
-	matchData, err := aggregator.AggregateMatchData(ctx, MatchDataRequest{
-		MatchID:  matchID,
-		HomeTeam: matchInfo.HomeTeam,
-		AwayTeam: matchInfo.AwayTeam,
-		Date:     matchInfo.Date,
-		Status:   matchInfo.Status,
-	})
+	matchData, err := aggregator.AggregateMatchData(ctx, c.buildMatchDataRequest(matchID, matchInfo))
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to aggregate match data: %v", err))
 		return
@@ -666,13 +660,7 @@ func (c *Config) generateDebate(w http.ResponseWriter, r *http.Request) {
 
 	// Use the data aggregator to get comprehensive match data
 	aggregator := NewDebateDataAggregator(c)
-	matchData, err := aggregator.AggregateMatchData(ctx, MatchDataRequest{
-		MatchID:  req.MatchID,
-		HomeTeam: matchInfo.HomeTeam,
-		AwayTeam: matchInfo.AwayTeam,
-		Date:     matchInfo.Date,
-		Status:   matchInfo.Status,
-	})
+	matchData, err := aggregator.AggregateMatchData(ctx, c.buildMatchDataRequest(req.MatchID, matchInfo))
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to aggregate match data: %v", err))
 		return
@@ -920,12 +908,7 @@ func (c *Config) getDebateByID(w http.ResponseWriter, r *http.Request, debateID 
 }
 
 // getMatchInfo gets basic match information
-func (c *Config) getMatchInfo(ctx context.Context, matchID string) (*struct {
-	HomeTeam string
-	AwayTeam string
-	Date     string
-	Status   string
-}, error) {
+func (c *Config) getMatchInfo(ctx context.Context, matchID string) (*MatchInfo, error) {
 	// Use configurable base URL with fallback
 	baseURL := c.APIFootballBaseURL
 	if baseURL == "" {
@@ -956,6 +939,9 @@ func (c *Config) getMatchInfo(ctx context.Context, matchID string) (*struct {
 				Status struct {
 					Short string `json:"short"`
 				} `json:"status"`
+				Venue struct {
+					Name string `json:"name"`
+				} `json:"venue"`
 			} `json:"fixture"`
 			Teams struct {
 				Home struct {
@@ -965,6 +951,32 @@ func (c *Config) getMatchInfo(ctx context.Context, matchID string) (*struct {
 					Name string `json:"name"`
 				} `json:"away"`
 			} `json:"teams"`
+			Goals struct {
+				Home int `json:"home"`
+				Away int `json:"away"`
+			} `json:"goals"`
+			Score struct {
+				Halftime struct {
+					Home int `json:"home"`
+					Away int `json:"away"`
+				} `json:"halftime"`
+				Fulltime struct {
+					Home int `json:"home"`
+					Away int `json:"away"`
+				} `json:"fulltime"`
+				Extratime struct {
+					Home *int `json:"home"`
+					Away *int `json:"away"`
+				} `json:"extratime"`
+				Penalty struct {
+					Home *int `json:"home"`
+					Away *int `json:"away"`
+				} `json:"penalty"`
+			} `json:"score"`
+			League struct {
+				Name   string `json:"name"`
+				Season int    `json:"season"`
+			} `json:"league"`
 		} `json:"response"`
 	}
 
@@ -978,16 +990,53 @@ func (c *Config) getMatchInfo(ctx context.Context, matchID string) (*struct {
 	}
 
 	match := matchResponse.Response[0]
-	return &struct {
-		HomeTeam string
-		AwayTeam string
-		Date     string
-		Status   string
-	}{
-		HomeTeam: match.Teams.Home.Name,
-		AwayTeam: match.Teams.Away.Name,
-		Date:     match.Fixture.Date,
-		Status:   match.Fixture.Status.Short,
+
+	// Determine final score based on match status
+	var homeScore, awayScore int
+	switch match.Fixture.Status.Short {
+	case "FT", "AET", "PEN":
+		homeScore = match.Score.Fulltime.Home
+		awayScore = match.Score.Fulltime.Away
+	case "HT":
+		homeScore = match.Score.Halftime.Home
+		awayScore = match.Score.Halftime.Away
+	default:
+		homeScore = match.Goals.Home
+		awayScore = match.Goals.Away
+	}
+
+	// Handle extra time and penalties
+	if match.Score.Extratime.Home != nil && match.Score.Extratime.Away != nil {
+		homeScore = *match.Score.Extratime.Home
+		awayScore = *match.Score.Extratime.Away
+	}
+	if match.Score.Penalty.Home != nil && match.Score.Penalty.Away != nil {
+		homeScore = *match.Score.Penalty.Home
+		awayScore = *match.Score.Penalty.Away
+	}
+
+	return &MatchInfo{
+		HomeTeam:        match.Teams.Home.Name,
+		AwayTeam:        match.Teams.Away.Name,
+		Date:            match.Fixture.Date,
+		Status:          match.Fixture.Status.Short,
+		HomeScore:       homeScore,
+		AwayScore:       awayScore,
+		HomeGoals:       match.Goals.Home,
+		AwayGoals:       match.Goals.Away,
+		HomeShots:       0, // Will be populated by fetchMatchStats if available
+		AwayShots:       0,
+		HomePossession:  0,
+		AwayPossession:  0,
+		HomeFouls:       0,
+		AwayFouls:       0,
+		HomeYellowCards: 0,
+		AwayYellowCards: 0,
+		HomeRedCards:    0,
+		AwayRedCards:    0,
+		Venue:           match.Fixture.Venue.Name,
+		League:          match.League.Name,
+		Season:          fmt.Sprintf("%d", match.League.Season),
 	}, nil
 }
 
@@ -1213,4 +1262,57 @@ func (c *Config) restoreDebate(w http.ResponseWriter, r *http.Request) {
 
 	fmt.Printf("Restored debate ID: %d\n", debateID)
 	respondWithJSON(w, http.StatusOK, map[string]string{"message": "Debate restored successfully"})
+}
+
+// MatchInfo represents detailed information about a match
+type MatchInfo struct {
+	HomeTeam        string
+	AwayTeam        string
+	Date            string
+	Status          string
+	HomeScore       int
+	AwayScore       int
+	HomeGoals       int
+	AwayGoals       int
+	HomeShots       int
+	AwayShots       int
+	HomePossession  int
+	AwayPossession  int
+	HomeFouls       int
+	AwayFouls       int
+	HomeYellowCards int
+	AwayYellowCards int
+	HomeRedCards    int
+	AwayRedCards    int
+	Venue           string
+	League          string
+	Season          string
+}
+
+// buildMatchDataRequest converts MatchInfo to MatchDataRequest
+func (c *Config) buildMatchDataRequest(matchID string, matchInfo *MatchInfo) MatchDataRequest {
+	return MatchDataRequest{
+		MatchID:         matchID,
+		HomeTeam:        matchInfo.HomeTeam,
+		AwayTeam:        matchInfo.AwayTeam,
+		Date:            matchInfo.Date,
+		Status:          matchInfo.Status,
+		HomeScore:       matchInfo.HomeScore,
+		AwayScore:       matchInfo.AwayScore,
+		HomeGoals:       matchInfo.HomeGoals,
+		AwayGoals:       matchInfo.AwayGoals,
+		HomeShots:       matchInfo.HomeShots,
+		AwayShots:       matchInfo.AwayShots,
+		HomePossession:  matchInfo.HomePossession,
+		AwayPossession:  matchInfo.AwayPossession,
+		HomeFouls:       matchInfo.HomeFouls,
+		AwayFouls:       matchInfo.AwayFouls,
+		HomeYellowCards: matchInfo.HomeYellowCards,
+		AwayYellowCards: matchInfo.AwayYellowCards,
+		HomeRedCards:    matchInfo.HomeRedCards,
+		AwayRedCards:    matchInfo.AwayRedCards,
+		Venue:           matchInfo.Venue,
+		League:          matchInfo.League,
+		Season:          matchInfo.Season,
+	}
 }

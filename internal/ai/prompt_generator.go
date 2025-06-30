@@ -31,6 +31,9 @@ type MatchData struct {
 	Stats           *MatchStats      `json:"stats,omitempty"`
 	NewsHeadlines   []string         `json:"news_headlines,omitempty"`
 	SocialSentiment *SocialSentiment `json:"social_sentiment,omitempty"`
+	Venue           string           `json:"venue,omitempty"`
+	League          string           `json:"league,omitempty"`
+	Season          string           `json:"season,omitempty"`
 }
 
 type LineupData struct {
@@ -49,6 +52,8 @@ type Player struct {
 }
 
 type MatchStats struct {
+	HomeScore       int `json:"home_score"`
+	AwayScore       int `json:"away_score"`
 	HomeGoals       int `json:"home_goals"`
 	AwayGoals       int `json:"away_goals"`
 	HomeShots       int `json:"home_shots"`
@@ -198,7 +203,9 @@ func (pg *PromptGenerator) generatePrompt(ctx context.Context, matchData MatchDa
 
 func (pg *PromptGenerator) buildSystemPrompt(promptType string) string {
 	if promptType == "pre_match" {
-		return `You are a football debate prompt generator. Create engaging, controversial debate topics for pre-match discussions.
+		return `You are a football debate prompt generator. Create engaging, controversial debate topics for PRE-MATCH discussions.
+
+IMPORTANT: This is a PRE-MATCH debate. The match has NOT happened yet. Focus on predictions, expectations, and pre-match analysis.
 
 Generate a JSON response with this structure:
 {
@@ -227,12 +234,17 @@ Focus on:
 - Lineup decisions and tactical choices
 - Player form and selection controversies
 - Managerial decisions
-- Bold predictions
+- Bold predictions about what will happen
 - Historical context and rivalries
+- Pre-match expectations and concerns
+
+DO NOT reference match results, final scores, or post-match analysis since the match hasn't happened yet.
 
 Make the debate engaging and controversial but respectful.`
 	} else {
-		return `You are a football debate prompt generator. Create engaging, controversial debate topics for post-match discussions.
+		return `You are a football debate prompt generator. Create engaging, controversial debate topics for POST-MATCH discussions.
+
+IMPORTANT: This is a POST-MATCH debate. The match has already happened. Focus on analysis of what occurred.
 
 Generate a JSON response with this structure:
 {
@@ -258,12 +270,13 @@ Generate a JSON response with this structure:
 }
 
 Focus on:
-- Key moments and turning points
+- Key moments and turning points from the match
 - Controversial decisions (refereeing, VAR)
 - Player performances and impact
 - Tactical changes and their effectiveness
 - Social media reactions and fan sentiment
 - Post-match analysis and what-ifs
+- Analysis of the final result
 
 Make the debate engaging and controversial but respectful.`
 	}
@@ -275,7 +288,19 @@ func (pg *PromptGenerator) buildUserPrompt(matchData MatchData, promptType strin
 	prompt.WriteString(fmt.Sprintf("Generate a %s debate prompt for this match:\n\n", promptType))
 	prompt.WriteString(fmt.Sprintf("Match: %s vs %s\n", matchData.HomeTeam, matchData.AwayTeam))
 	prompt.WriteString(fmt.Sprintf("Date: %s\n", matchData.Date))
-	prompt.WriteString(fmt.Sprintf("Status: %s\n\n", matchData.Status))
+	prompt.WriteString(fmt.Sprintf("Status: %s\n", matchData.Status))
+
+	// Add venue, league, and season information if available
+	if matchData.Venue != "" {
+		prompt.WriteString(fmt.Sprintf("Venue: %s\n", matchData.Venue))
+	}
+	if matchData.League != "" {
+		prompt.WriteString(fmt.Sprintf("League: %s\n", matchData.League))
+	}
+	if matchData.Season != "" {
+		prompt.WriteString(fmt.Sprintf("Season: %s\n", matchData.Season))
+	}
+	prompt.WriteString("\n")
 
 	if matchData.Lineups != nil {
 		prompt.WriteString("LINEUPS:\n")
@@ -300,13 +325,25 @@ func (pg *PromptGenerator) buildUserPrompt(matchData MatchData, promptType strin
 
 	if matchData.Stats != nil {
 		prompt.WriteString("MATCH STATS:\n")
-		prompt.WriteString(fmt.Sprintf("Score: %d-%d\n", matchData.Stats.HomeGoals, matchData.Stats.AwayGoals))
-		prompt.WriteString(fmt.Sprintf("Shots: %d-%d\n", matchData.Stats.HomeShots, matchData.Stats.AwayShots))
-		prompt.WriteString(fmt.Sprintf("Possession: %d%%-%d%%\n", matchData.Stats.HomePossession, matchData.Stats.AwayPossession))
-		prompt.WriteString(fmt.Sprintf("Fouls: %d-%d\n", matchData.Stats.HomeFouls, matchData.Stats.AwayFouls))
-		prompt.WriteString(fmt.Sprintf("Cards: Y(%d-%d) R(%d-%d)\n\n",
-			matchData.Stats.HomeYellowCards, matchData.Stats.AwayYellowCards,
-			matchData.Stats.HomeRedCards, matchData.Stats.AwayRedCards))
+		if promptType == "post_match" {
+			// For post-match debates, show final scores and stats
+			prompt.WriteString(fmt.Sprintf("Final Score: %d-%d\n", matchData.Stats.HomeScore, matchData.Stats.AwayScore))
+			prompt.WriteString(fmt.Sprintf("Shots: %d-%d\n", matchData.Stats.HomeShots, matchData.Stats.AwayShots))
+			prompt.WriteString(fmt.Sprintf("Possession: %d%%-%d%%\n", matchData.Stats.HomePossession, matchData.Stats.AwayPossession))
+			prompt.WriteString(fmt.Sprintf("Fouls: %d-%d\n", matchData.Stats.HomeFouls, matchData.Stats.AwayFouls))
+			prompt.WriteString(fmt.Sprintf("Cards: Yellow(%d-%d) Red(%d-%d)\n\n",
+				matchData.Stats.HomeYellowCards, matchData.Stats.AwayYellowCards,
+				matchData.Stats.HomeRedCards, matchData.Stats.AwayRedCards))
+		} else {
+			// For pre-match debates, show current form or recent stats if available
+			if matchData.Stats.HomeShots > 0 || matchData.Stats.AwayShots > 0 {
+				prompt.WriteString(fmt.Sprintf("Recent Form - Shots: %d-%d\n", matchData.Stats.HomeShots, matchData.Stats.AwayShots))
+			}
+			if matchData.Stats.HomePossession > 0 || matchData.Stats.AwayPossession > 0 {
+				prompt.WriteString(fmt.Sprintf("Recent Form - Possession: %d%%-%d%%\n", matchData.Stats.HomePossession, matchData.Stats.AwayPossession))
+			}
+			prompt.WriteString("\n")
+		}
 	}
 
 	if len(matchData.NewsHeadlines) > 0 {

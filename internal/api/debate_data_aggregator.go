@@ -17,11 +17,28 @@ type DebateDataAggregator struct {
 }
 
 type MatchDataRequest struct {
-	MatchID  string `json:"match_id"`
-	HomeTeam string `json:"home_team"`
-	AwayTeam string `json:"away_team"`
-	Date     string `json:"date"`
-	Status   string `json:"status"`
+	MatchID         string `json:"match_id"`
+	HomeTeam        string `json:"home_team"`
+	AwayTeam        string `json:"away_team"`
+	Date            string `json:"date"`
+	Status          string `json:"status"`
+	HomeScore       int    `json:"home_score"`
+	AwayScore       int    `json:"away_score"`
+	HomeGoals       int    `json:"home_goals"`
+	AwayGoals       int    `json:"away_goals"`
+	HomeShots       int    `json:"home_shots"`
+	AwayShots       int    `json:"away_shots"`
+	HomePossession  int    `json:"home_possession"`
+	AwayPossession  int    `json:"away_possession"`
+	HomeFouls       int    `json:"home_fouls"`
+	AwayFouls       int    `json:"away_fouls"`
+	HomeYellowCards int    `json:"home_yellow_cards"`
+	AwayYellowCards int    `json:"away_yellow_cards"`
+	HomeRedCards    int    `json:"home_red_cards"`
+	AwayRedCards    int    `json:"away_red_cards"`
+	Venue           string `json:"venue"`
+	League          string `json:"league"`
+	Season          string `json:"season"`
 }
 
 func NewDebateDataAggregator(config *Config) *DebateDataAggregator {
@@ -38,6 +55,27 @@ func (dda *DebateDataAggregator) AggregateMatchData(ctx context.Context, matchRe
 		AwayTeam: matchReq.AwayTeam,
 		Date:     matchReq.Date,
 		Status:   matchReq.Status,
+		Venue:    matchReq.Venue,
+		League:   matchReq.League,
+		Season:   matchReq.Season,
+	}
+
+	// Create enhanced stats with the data we already have
+	enhancedStats := &ai.MatchStats{
+		HomeScore:       matchReq.HomeScore,
+		AwayScore:       matchReq.AwayScore,
+		HomeGoals:       matchReq.HomeGoals,
+		AwayGoals:       matchReq.AwayGoals,
+		HomeShots:       matchReq.HomeShots,
+		AwayShots:       matchReq.AwayShots,
+		HomePossession:  matchReq.HomePossession,
+		AwayPossession:  matchReq.AwayPossession,
+		HomeFouls:       matchReq.HomeFouls,
+		AwayFouls:       matchReq.AwayFouls,
+		HomeYellowCards: matchReq.HomeYellowCards,
+		AwayYellowCards: matchReq.AwayYellowCards,
+		HomeRedCards:    matchReq.HomeRedCards,
+		AwayRedCards:    matchReq.AwayRedCards,
 	}
 
 	// Fetch lineups if match is upcoming or in progress
@@ -50,15 +88,29 @@ func (dda *DebateDataAggregator) AggregateMatchData(ctx context.Context, matchRe
 		}
 	}
 
-	// Fetch match statistics if match is finished
-	if matchReq.Status == "FT" || matchReq.Status == "AET" || matchReq.Status == "PEN" {
-		stats, err := dda.fetchMatchStats(ctx, matchReq.MatchID)
+	// Fetch detailed match statistics if match is finished or in progress
+	if matchReq.Status == "FT" || matchReq.Status == "AET" || matchReq.Status == "PEN" ||
+		matchReq.Status == "1H" || matchReq.Status == "2H" || matchReq.Status == "HT" {
+		detailedStats, err := dda.fetchMatchStats(ctx, matchReq.MatchID)
 		if err != nil {
-			fmt.Printf("Failed to fetch match stats: %v\n", err)
+			fmt.Printf("Failed to fetch detailed match stats for match ID %s: %v\n", matchReq.MatchID, err)
 		} else {
-			matchData.Stats = stats
+			// Merge detailed stats with basic stats
+			enhancedStats.HomeShots = detailedStats.HomeShots
+			enhancedStats.AwayShots = detailedStats.AwayShots
+			enhancedStats.HomePossession = detailedStats.HomePossession
+			enhancedStats.AwayPossession = detailedStats.AwayPossession
+			enhancedStats.HomeFouls = detailedStats.HomeFouls
+			enhancedStats.AwayFouls = detailedStats.AwayFouls
+			enhancedStats.HomeYellowCards = detailedStats.HomeYellowCards
+			enhancedStats.AwayYellowCards = detailedStats.AwayYellowCards
+			enhancedStats.HomeRedCards = detailedStats.HomeRedCards
+			enhancedStats.AwayRedCards = detailedStats.AwayRedCards
 		}
 	}
+
+	// Set the enhanced stats
+	matchData.Stats = enhancedStats
 
 	// Fetch news headlines
 	headlines, err := dda.fetchNewsHeadlines(ctx, matchReq.HomeTeam, matchReq.AwayTeam)
