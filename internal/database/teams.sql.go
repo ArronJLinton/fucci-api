@@ -7,30 +7,293 @@ package database
 
 import (
 	"context"
+	"database/sql"
+
+	"github.com/google/uuid"
 )
 
 const createTeam = `-- name: CreateTeam :one
-INSERT INTO teams (name, country, state)
-VALUES ($1, $2, $3)
-RETURNING id, name, country, state, created_at, updated_at
+INSERT INTO teams (name, description, league_id, manager_id, logo_url, city, country, founded, stadium, capacity)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+RETURNING id, name, league_id, state, country, created_at, updated_at, description, manager_id, logo_url, city, founded, stadium, capacity
 `
 
 type CreateTeamParams struct {
-	Name    string
-	Country string
-	State   string
+	Name        string
+	Description sql.NullString
+	LeagueID    uuid.NullUUID
+	ManagerID   uuid.NullUUID
+	LogoUrl     sql.NullString
+	City        sql.NullString
+	Country     string
+	Founded     sql.NullInt32
+	Stadium     sql.NullString
+	Capacity    sql.NullInt32
 }
 
 func (q *Queries) CreateTeam(ctx context.Context, arg CreateTeamParams) (Team, error) {
-	row := q.db.QueryRowContext(ctx, createTeam, arg.Name, arg.Country, arg.State)
+	row := q.db.QueryRowContext(ctx, createTeam,
+		arg.Name,
+		arg.Description,
+		arg.LeagueID,
+		arg.ManagerID,
+		arg.LogoUrl,
+		arg.City,
+		arg.Country,
+		arg.Founded,
+		arg.Stadium,
+		arg.Capacity,
+	)
 	var i Team
 	err := row.Scan(
 		&i.ID,
 		&i.Name,
-		&i.Country,
+		&i.LeagueID,
 		&i.State,
+		&i.Country,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Description,
+		&i.ManagerID,
+		&i.LogoUrl,
+		&i.City,
+		&i.Founded,
+		&i.Stadium,
+		&i.Capacity,
+	)
+	return i, err
+}
+
+const deleteTeam = `-- name: DeleteTeam :exec
+DELETE FROM teams WHERE id = $1
+`
+
+func (q *Queries) DeleteTeam(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.ExecContext(ctx, deleteTeam, id)
+	return err
+}
+
+const getTeam = `-- name: GetTeam :one
+SELECT id, name, league_id, state, country, created_at, updated_at, description, manager_id, logo_url, city, founded, stadium, capacity FROM teams WHERE id = $1
+`
+
+func (q *Queries) GetTeam(ctx context.Context, id uuid.UUID) (Team, error) {
+	row := q.db.QueryRowContext(ctx, getTeam, id)
+	var i Team
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.LeagueID,
+		&i.State,
+		&i.Country,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Description,
+		&i.ManagerID,
+		&i.LogoUrl,
+		&i.City,
+		&i.Founded,
+		&i.Stadium,
+		&i.Capacity,
+	)
+	return i, err
+}
+
+const getTeamsByLeague = `-- name: GetTeamsByLeague :many
+SELECT id, name, league_id, state, country, created_at, updated_at, description, manager_id, logo_url, city, founded, stadium, capacity FROM teams WHERE league_id = $1 ORDER BY name
+`
+
+func (q *Queries) GetTeamsByLeague(ctx context.Context, leagueID uuid.NullUUID) ([]Team, error) {
+	rows, err := q.db.QueryContext(ctx, getTeamsByLeague, leagueID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Team
+	for rows.Next() {
+		var i Team
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.LeagueID,
+			&i.State,
+			&i.Country,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.Description,
+			&i.ManagerID,
+			&i.LogoUrl,
+			&i.City,
+			&i.Founded,
+			&i.Stadium,
+			&i.Capacity,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listTeams = `-- name: ListTeams :many
+SELECT id, name, league_id, state, country, created_at, updated_at, description, manager_id, logo_url, city, founded, stadium, capacity FROM teams 
+WHERE ($1::uuid IS NULL OR league_id = $1)
+  AND ($2::uuid IS NULL OR manager_id = $2)
+ORDER BY name
+LIMIT $3 OFFSET $4
+`
+
+type ListTeamsParams struct {
+	Column1 uuid.UUID
+	Column2 uuid.UUID
+	Limit   int32
+	Offset  int32
+}
+
+func (q *Queries) ListTeams(ctx context.Context, arg ListTeamsParams) ([]Team, error) {
+	rows, err := q.db.QueryContext(ctx, listTeams,
+		arg.Column1,
+		arg.Column2,
+		arg.Limit,
+		arg.Offset,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Team
+	for rows.Next() {
+		var i Team
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.LeagueID,
+			&i.State,
+			&i.Country,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.Description,
+			&i.ManagerID,
+			&i.LogoUrl,
+			&i.City,
+			&i.Founded,
+			&i.Stadium,
+			&i.Capacity,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listTeamsByLeague = `-- name: ListTeamsByLeague :many
+SELECT id, name, league_id, state, country, created_at, updated_at, description, manager_id, logo_url, city, founded, stadium, capacity FROM teams WHERE league_id = $1 ORDER BY name
+`
+
+func (q *Queries) ListTeamsByLeague(ctx context.Context, leagueID uuid.NullUUID) ([]Team, error) {
+	rows, err := q.db.QueryContext(ctx, listTeamsByLeague, leagueID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Team
+	for rows.Next() {
+		var i Team
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.LeagueID,
+			&i.State,
+			&i.Country,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.Description,
+			&i.ManagerID,
+			&i.LogoUrl,
+			&i.City,
+			&i.Founded,
+			&i.Stadium,
+			&i.Capacity,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const updateTeam = `-- name: UpdateTeam :one
+UPDATE teams 
+SET name = $2, description = $3, league_id = $4, manager_id = $5, 
+    logo_url = $6, city = $7, country = $8, founded = $9, 
+    stadium = $10, capacity = $11, updated_at = CURRENT_TIMESTAMP
+WHERE id = $1
+RETURNING id, name, league_id, state, country, created_at, updated_at, description, manager_id, logo_url, city, founded, stadium, capacity
+`
+
+type UpdateTeamParams struct {
+	ID          uuid.UUID
+	Name        string
+	Description sql.NullString
+	LeagueID    uuid.NullUUID
+	ManagerID   uuid.NullUUID
+	LogoUrl     sql.NullString
+	City        sql.NullString
+	Country     string
+	Founded     sql.NullInt32
+	Stadium     sql.NullString
+	Capacity    sql.NullInt32
+}
+
+func (q *Queries) UpdateTeam(ctx context.Context, arg UpdateTeamParams) (Team, error) {
+	row := q.db.QueryRowContext(ctx, updateTeam,
+		arg.ID,
+		arg.Name,
+		arg.Description,
+		arg.LeagueID,
+		arg.ManagerID,
+		arg.LogoUrl,
+		arg.City,
+		arg.Country,
+		arg.Founded,
+		arg.Stadium,
+		arg.Capacity,
+	)
+	var i Team
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.LeagueID,
+		&i.State,
+		&i.Country,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Description,
+		&i.ManagerID,
+		&i.LogoUrl,
+		&i.City,
+		&i.Founded,
+		&i.Stadium,
+		&i.Capacity,
 	)
 	return i, err
 }

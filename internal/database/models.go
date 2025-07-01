@@ -7,6 +7,8 @@ package database
 import (
 	"database/sql"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 type Comment struct {
@@ -52,6 +54,20 @@ type DebateCard struct {
 	UpdatedAt   sql.NullTime
 }
 
+type League struct {
+	ID          uuid.UUID
+	Name        string
+	Description sql.NullString
+	OwnerID     int32
+	Country     sql.NullString
+	Level       sql.NullInt32
+	LogoUrl     sql.NullString
+	Website     sql.NullString
+	Founded     sql.NullInt32
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+}
+
 type Medium struct {
 	ID        int32
 	MatchID   string
@@ -60,13 +76,53 @@ type Medium struct {
 	UpdatedAt time.Time
 }
 
+type PlayerProfile struct {
+	ID         uuid.UUID
+	UserID     int32
+	TeamID     uuid.NullUUID
+	Position   string
+	Age        int32
+	Country    string
+	HeightCm   int32
+	Pace       int32
+	Shooting   int32
+	Passing    int32
+	Stamina    int32
+	Dribbling  int32
+	Defending  int32
+	Physical   int32
+	IsVerified bool
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
+}
+
 type Team struct {
-	ID        int32
-	Name      string
-	Country   string
-	State     string
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	ID          uuid.UUID
+	Name        string
+	LeagueID    uuid.NullUUID
+	State       sql.NullString
+	Country     string
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+	Description sql.NullString
+	ManagerID   uuid.NullUUID
+	LogoUrl     sql.NullString
+	City        sql.NullString
+	Founded     sql.NullInt32
+	Stadium     sql.NullString
+	Capacity    sql.NullInt32
+}
+
+type TeamManager struct {
+	ID         uuid.UUID
+	UserID     int32
+	LeagueID   uuid.UUID
+	TeamID     uuid.NullUUID
+	Title      sql.NullString
+	Experience sql.NullInt32
+	Bio        sql.NullString
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
 }
 
 type User struct {
@@ -76,6 +132,14 @@ type User struct {
 	Email     string
 	CreatedAt time.Time
 	UpdatedAt time.Time
+	IsAdmin   bool
+}
+
+type Verification struct {
+	ID              uuid.UUID
+	PlayerProfileID uuid.UUID
+	VerifierUserID  int32
+	CreatedAt       time.Time
 }
 
 type Vote struct {

@@ -28,3 +28,12 @@ func (config *Config) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 	}
 	respondWithJSON(w, http.StatusOK, user)
 }
+
+func (config *Config) handleListAllUsers(w http.ResponseWriter, r *http.Request) {
+	users, err := config.DB.ListUsers(r.Context())
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, fmt.Sprintf("Error listing users: %s", err))
+		return
+	}
+	respondWithJSON(w, http.StatusOK, users)
+}
