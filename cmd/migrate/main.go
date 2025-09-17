@@ -1,3 +1,6 @@
+//go:build migrate
+// +build migrate
+
 package main
 
 import (
@@ -58,7 +61,7 @@ func main() {
 
 	// Run pending migrations
 	pendingMigrations := getPendingMigrations(migrationFiles, executedMigrations)
-	
+
 	if len(pendingMigrations) == 0 {
 		fmt.Println("No pending migrations found")
 		return
@@ -68,7 +71,7 @@ func main() {
 
 	for _, migration := range pendingMigrations {
 		fmt.Printf("Running migration: %s\n", migration.Name)
-		
+
 		// Read migration file
 		content, err := ioutil.ReadFile(filepath.Join("sql/schema", migration.Name))
 		if err != nil {
@@ -101,7 +104,7 @@ func createMigrationsTable(db *sql.DB) {
 		name VARCHAR(255) NOT NULL,
 		executed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 	)`
-	
+
 	if _, err := db.Exec(query); err != nil {
 		log.Fatal("Failed to create migrations table:", err)
 	}
@@ -166,7 +169,7 @@ func extractUpMigration(content string) string {
 	// Find the -- +goose Down marker
 	downMarker := "-- +goose Down"
 	downIndex := strings.Index(content, downMarker)
-	
+
 	if downIndex == -1 {
 		// No down migration, return everything after -- +goose Up
 		upMarker := "-- +goose Up"
@@ -176,15 +179,15 @@ func extractUpMigration(content string) string {
 		}
 		return strings.TrimSpace(content[upIndex+len(upMarker):])
 	}
-	
+
 	// Return everything between -- +goose Up and -- +goose Down
 	upMarker := "-- +goose Up"
 	upIndex := strings.Index(content, upMarker)
 	if upIndex == -1 {
 		return strings.TrimSpace(content[:downIndex])
 	}
-	
-	upContent := content[upIndex+len(upMarker):downIndex]
+
+	upContent := content[upIndex+len(upMarker) : downIndex]
 	return strings.TrimSpace(upContent)
 }
 

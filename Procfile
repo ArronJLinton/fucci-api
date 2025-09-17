@@ -1,2 +1,2 @@
-release: go run migrate.go
+release: go run cmd/migrate/main.go
 web: ./main
