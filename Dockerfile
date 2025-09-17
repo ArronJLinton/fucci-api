@@ -1,5 +1,5 @@
-# Build stage
-FROM golang:1.22-alpine AS builder
+# Heroku-optimized Dockerfile
+FROM golang:1.23-alpine AS builder
 
 WORKDIR /app
 
@@ -26,11 +26,13 @@ RUN apk --no-cache add ca-certificates
 
 # Copy the binary from builder
 COPY --from=builder /app/main .
-COPY --from=builder /app/sql ./sql
 
 # Create a non-root user
 RUN adduser -D appuser
 USER appuser
+
+# Expose port (Heroku will set PORT env var)
+EXPOSE 8080
 
 # Run the application
 CMD ["./main"] 
