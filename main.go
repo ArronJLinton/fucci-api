@@ -83,7 +83,7 @@ func main() {
 		port = "8080"
 	}
 
-	// Always bind to 0.0.0.0 for both local and Railway
+	// Always bind to 0.0.0.0 for both local and production
 	bindAddr := "0.0.0.0"
 	serverAddr := fmt.Sprintf("%s:%s", bindAddr, port)
 	fmt.Printf("Server starting on %s\n", serverAddr)
